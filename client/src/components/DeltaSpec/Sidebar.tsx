@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Activity, TrendingUp, Grid3x3, BarChart3, Zap, Download } from 'lucide-react';
+import { Activity, TrendingUp, Grid3x3, BarChart3, Zap, Download, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,7 @@ const tabs = [
   { id: 'footprint', label: 'Footprint', icon: Grid3x3 },
   { id: 'volume-profile', label: 'Volume Profile', icon: BarChart3 },
   { id: 'signals', label: 'Signals', icon: Zap, badge: '3' },
+  { id: 'llm-guidance', label: 'AI Guidance', icon: Sparkles, badge: 'NEW', isHighlight: true },
   { id: 'export-data', label: 'Export Data', icon: Download },
 ];
 
@@ -34,15 +35,26 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
                 variant={isActive ? 'default' : 'ghost'}
                 className={`w-full justify-start gap-3 ${
                   isActive
-                    ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                    ? tab.isHighlight
+                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg'
+                      : 'bg-blue-500 hover:bg-blue-600 text-white'
+                    : tab.isHighlight
+                    ? 'hover:bg-purple-500/10 border border-purple-500/20'
                     : 'hover:bg-accent'
                 }`}
                 onClick={() => onTabChange(tab.id)}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className={`h-5 w-5 ${tab.isHighlight && !isActive ? 'text-purple-400' : ''}`} />
                 <span className="flex-1 text-left">{tab.label}</span>
                 {tab.badge && (
-                  <Badge variant="secondary" className="ml-auto">
+                  <Badge
+                    variant="secondary"
+                    className={`ml-auto ${
+                      tab.isHighlight
+                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0'
+                        : ''
+                    }`}
+                  >
                     {tab.badge}
                   </Badge>
                 )}

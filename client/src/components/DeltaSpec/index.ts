@@ -9,4 +9,5 @@ export { DeltaAnalysisView } from './Views/DeltaAnalysisView';
 export { FootprintView } from './Views/FootprintView';
 export { VolumeProfileView } from './Views/VolumeProfileView';
 export { SignalsView } from './Views/SignalsView';
+export { LLMGuidanceView } from './Views/LLMGuidanceView';
 export { ExportDataView } from './Views/ExportDataView';

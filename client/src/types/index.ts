@@ -102,3 +102,50 @@ export interface UserSettings {
   timeFormat: string;
   timezone: string;
 }
+
+export interface LLMMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: string;
+  metadata?: {
+    symbol?: string;
+    confidence?: number;
+    sentiment?: 'bullish' | 'bearish' | 'neutral';
+    tags?: string[];
+  };
+}
+
+export interface LLMGuidance {
+  id: string;
+  symbol: string;
+  analysis: {
+    sentiment: 'bullish' | 'bearish' | 'neutral';
+    confidence: number;
+    summary: string;
+    keyPoints: string[];
+  };
+  recommendations: {
+    action: 'buy' | 'sell' | 'hold';
+    entryPrice?: number;
+    stopLoss?: number;
+    takeProfit?: number;
+    positionSize?: string;
+    reasoning: string;
+  };
+  risks: {
+    level: 'low' | 'medium' | 'high';
+    factors: string[];
+  };
+  timestamp: string;
+}
+
+export interface QuickInsight {
+  id: string;
+  type: 'tip' | 'pattern' | 'level' | 'sentiment';
+  title: string;
+  description: string;
+  icon: string;
+  color: string;
+  timestamp: string;
+}

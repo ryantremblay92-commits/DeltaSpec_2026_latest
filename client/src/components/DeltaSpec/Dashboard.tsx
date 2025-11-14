@@ -8,6 +8,7 @@ import { FootprintView } from './Views/FootprintView';
 import { VolumeProfileView } from './Views/VolumeProfileView';
 import { SignalsView } from './Views/SignalsView';
 import { ExportDataView } from './Views/ExportDataView';
+import { LLMGuidanceView } from './Views/LLMGuidanceView';
 
 export function Dashboard() {
   const [currentSymbol, setCurrentSymbol] = useState('BTC/USDT');
@@ -26,6 +27,8 @@ export function Dashboard() {
         return <VolumeProfileView symbol={currentSymbol} />;
       case 'signals':
         return <SignalsView symbol={currentSymbol} />;
+      case 'llm-guidance':
+        return <LLMGuidanceView symbol={currentSymbol} />;
       case 'export-data':
         return <ExportDataView symbol={currentSymbol} />;
       default:
