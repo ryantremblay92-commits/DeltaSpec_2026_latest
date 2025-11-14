@@ -7,16 +7,17 @@ import { Register } from "./pages/Register"
 import { ProtectedRoute } from "./components/ProtectedRoute"
 import { Layout } from "./components/Layout"
 import { BlankPage } from "./pages/BlankPage"
+import { Dashboard } from "./components/DeltaSpec/Dashboard"
 
 function App() {
   return (
   <AuthProvider>
-    <ThemeProvider defaultTheme="light" storageKey="ui-theme">
+    <ThemeProvider defaultTheme="dark" storageKey="ui-theme">
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/" element={<ProtectedRoute> <Layout /> </ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute> <Dashboard /> </ProtectedRoute>} />
           <Route path="*" element={<BlankPage />} />
         </Routes>
       </Router>
