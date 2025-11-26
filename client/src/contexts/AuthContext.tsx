@@ -52,8 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchAuthConfig();
   }, []);
 
-  const setAuthData = (accessToken, refreshToken, userData) => {
+  const setAuthData = (accessToken: any, refreshToken: any, userData: any) => {
     if (accessToken || refreshToken) {
+      console.log('Setting refreshToken:', refreshToken);
       localStorage.setItem("refreshToken", refreshToken);
       localStorage.setItem("accessToken", accessToken);
       localStorage.setItem("userData", JSON.stringify(userData));
@@ -79,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthData(accessToken, refreshToken, userData);
     } catch (error) {
       resetAuth();
-      throw new Error(error?.message || 'Login failed');
+      throw new Error((error as Error)?.message || 'Login failed');
     }
   };
 
@@ -90,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthData(accessToken, refreshToken, userData);
     } catch (error) {
       resetAuth();
-      throw new Error(error?.message || 'Registration failed');
+      throw new Error((error as Error)?.message || 'Registration failed');
     }
   };
 

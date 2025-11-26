@@ -1,5 +1,5 @@
-import { Router, Request, Response } from 'express';
-import { requireUser } from './middlewares/auth';
+import { Router, Response } from 'express';
+import { requireUser, AuthRequest } from './middlewares/auth';
 import * as LLMController from '../services/llmController';
 
 const router = Router();
@@ -8,7 +8,7 @@ const router = Router();
 // Endpoint: POST /api/llm/chat
 // Request: { message: string, symbol?: string }
 // Response: { message: ILLMMessage }
-router.post('/chat', requireUser(), async (req: Request, res: Response) => {
+router.post('/chat', requireUser(), async (req: AuthRequest, res: Response) => {
   try {
     const { message, symbol } = req.body;
 
@@ -16,6 +16,9 @@ router.post('/chat', requireUser(), async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Message is required and must be a string' });
     }
 
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
     console.log('[LLM Routes] POST /api/llm/chat:', { userId: req.user._id, symbol, messageLength: message.length });
 
     const response = await LLMController.sendChatMessage(
@@ -35,7 +38,7 @@ router.post('/chat', requireUser(), async (req: Request, res: Response) => {
 // Endpoint: GET /api/llm/guidance
 // Request: { symbol: string } (query parameter)
 // Response: { guidance: LLMGuidance }
-router.get('/guidance', requireUser(), async (req: Request, res: Response) => {
+router.get('/guidance', requireUser(), async (req: AuthRequest, res: Response) => {
   try {
     const { symbol } = req.query;
 
@@ -43,6 +46,9 @@ router.get('/guidance', requireUser(), async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Symbol is required and must be a string' });
     }
 
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
     console.log('[LLM Routes] GET /api/llm/guidance:', { userId: req.user._id, symbol });
 
     const guidance = await LLMController.generateGuidance(
@@ -61,11 +67,14 @@ router.get('/guidance', requireUser(), async (req: Request, res: Response) => {
 // Endpoint: GET /api/llm/insights
 // Request: { symbol?: string, limit?: number } (query parameters)
 // Response: { insights: QuickInsight[] }
-router.get('/insights', requireUser(), async (req: Request, res: Response) => {
+router.get('/insights', requireUser(), async (req: AuthRequest, res: Response) => {
   try {
     const { symbol, limit } = req.query;
     const parsedLimit = limit ? parseInt(limit as string, 10) : 4;
 
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
     console.log('[LLM Routes] GET /api/llm/insights:', { userId: req.user._id, symbol, limit: parsedLimit });
 
     const insights = await LLMController.generateQuickInsights(
@@ -84,11 +93,14 @@ router.get('/insights', requireUser(), async (req: Request, res: Response) => {
 // Endpoint: GET /api/llm/history
 // Request: { limit?: number } (query parameter)
 // Response: { messages: LLMMessage[] }
-router.get('/history', requireUser(), async (req: Request, res: Response) => {
+router.get('/history', requireUser(), async (req: AuthRequest, res: Response) => {
   try {
     const { limit } = req.query;
     const parsedLimit = limit ? parseInt(limit as string, 10) : 50;
 
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
     console.log('[LLM Routes] GET /api/llm/history:', { userId: req.user._id, limit: parsedLimit });
 
     const messages = await LLMController.getChatHistory(

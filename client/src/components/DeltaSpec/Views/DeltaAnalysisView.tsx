@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getDeltaAnalysis } from '@/api/deltaAnalysis';
+import { useMarketData } from '@/hooks/useMarketData';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
 interface DeltaAnalysisViewProps {
@@ -12,24 +12,25 @@ export function DeltaAnalysisView({ symbol }: DeltaAnalysisViewProps) {
   const [lookback, setLookback] = useState('15m');
   const [method, setMethod] = useState('time-based');
   const [sensitivity, setSensitivity] = useState('medium');
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { cumulativeDelta, trades, isConnected } = useMarketData();
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const result = await getDeltaAnalysis(symbol, lookback, method, sensitivity);
-        setData(result);
-      } catch (error) {
-        console.error('Failed to load delta analysis:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Calculate buy/sell volumes from trades
+  const buyVolume = trades
+    .filter(t => t.side === 'buy')
+    .reduce((sum, t) => sum + (parseFloat(t.size) || 0), 0);
 
-    loadData();
-  }, [symbol, lookback, method, sensitivity]);
+  const sellVolume = trades
+    .filter(t => t.side === 'sell')
+    .reduce((sum, t) => sum + (parseFloat(t.size) || 0), 0);
+
+  const totalVolume = buyVolume + sellVolume;
+  const buyPercentage = totalVolume > 0 ? (buyVolume / totalVolume) * 100 : 50;
+  const sellPercentage = totalVolume > 0 ? (sellVolume / totalVolume) * 100 : 50;
+  const netDelta = buyVolume - sellVolume;
+
+  const cumulativeDeltaValue = cumulativeDelta?.cumulative_delta
+    ? parseFloat(cumulativeDelta.cumulative_delta)
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -92,11 +93,11 @@ export function DeltaAnalysisView({ symbol }: DeltaAnalysisViewProps) {
       </Card>
 
       {/* Metrics Grid */}
-      {loading ? (
+      {!isConnected && trades.length === 0 ? (
         <div className="text-center text-muted-foreground py-8">
-          Loading delta analysis...
+          Waiting for live data...
         </div>
-      ) : data ? (
+      ) : (
         <div className="grid grid-cols-2 gap-4">
           {/* Cumulative Delta */}
           <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20">
@@ -107,12 +108,16 @@ export function DeltaAnalysisView({ symbol }: DeltaAnalysisViewProps) {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-blue-500 font-mono">
-                ${(data.cumulativeDelta / 1e6).toFixed(2)}M
+                {cumulativeDeltaValue.toFixed(2)}
               </div>
               <div className="flex items-center gap-2 mt-2">
-                <TrendingUp className="h-4 w-4 text-green-500" />
-                <span className="text-xs text-green-500 font-medium">
-                  +15.2% from previous
+                {cumulativeDeltaValue >= 0 ? (
+                  <TrendingUp className="h-4 w-4 text-green-500" />
+                ) : (
+                  <TrendingDown className="h-4 w-4 text-red-500" />
+                )}
+                <span className={`text-xs font-medium ${cumulativeDeltaValue >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {cumulativeDeltaValue >= 0 ? 'Bullish' : 'Bearish'}
                 </span>
               </div>
             </CardContent>
@@ -127,14 +132,14 @@ export function DeltaAnalysisView({ symbol }: DeltaAnalysisViewProps) {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-green-500 font-mono">
-                ${(data.buyVolume / 1e6).toFixed(2)}M
+                {buyVolume.toFixed(4)}
               </div>
               <div className="mt-2">
                 <div className="text-xs text-muted-foreground mb-1">
-                  58% of total
+                  {buyPercentage.toFixed(1)}% of total
                 </div>
                 <div className="h-2 bg-border rounded-full overflow-hidden">
-                  <div className="h-full w-[58%] bg-green-500" />
+                  <div className="h-full bg-green-500" style={{ width: `${buyPercentage}%` }} />
                 </div>
               </div>
             </CardContent>
@@ -149,14 +154,14 @@ export function DeltaAnalysisView({ symbol }: DeltaAnalysisViewProps) {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-red-500 font-mono">
-                ${(data.sellVolume / 1e6).toFixed(2)}M
+                {sellVolume.toFixed(4)}
               </div>
               <div className="mt-2">
                 <div className="text-xs text-muted-foreground mb-1">
-                  42% of total
+                  {sellPercentage.toFixed(1)}% of total
                 </div>
                 <div className="h-2 bg-border rounded-full overflow-hidden">
-                  <div className="h-full w-[42%] bg-red-500" />
+                  <div className="h-full bg-red-500" style={{ width: `${sellPercentage}%` }} />
                 </div>
               </div>
             </CardContent>
@@ -171,17 +176,17 @@ export function DeltaAnalysisView({ symbol }: DeltaAnalysisViewProps) {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-purple-500 font-mono">
-                ${(data.netDelta / 1e6).toFixed(2)}M
+                {netDelta.toFixed(4)}
               </div>
               <div className="mt-2">
-                <div className="text-xs text-green-500 font-medium">
-                  Strong Buying Pressure
+                <div className={`text-xs font-medium ${netDelta > 0 ? 'text-green-500' : netDelta < 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                  {netDelta > 0 ? 'Strong Buying Pressure' : netDelta < 0 ? 'Strong Selling Pressure' : 'Neutral'}
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

@@ -24,7 +24,7 @@ Respond in a structured JSON format:
   "confidence": 75,
   "summary": "Brief market analysis summary",
   "keyPoints": ["point1", "point2", "point3"],
-  "action": "buy|sell|hold",
+  "action": "buy",
   "entryPrice": 67500,
   "stopLoss": 66000,
   "takeProfit": 69800,

@@ -1,39 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown } from 'lucide-react';
-import { getMarketData, getRecentTrades } from '@/api/marketData';
-import { formatDistanceToNow } from 'date-fns';
+import { useMarketData } from '@/hooks/useMarketData';
+import { PriceChart } from './PriceChart';
 
 interface LiveDataViewProps {
   symbol: string;
 }
 
 export function LiveDataView({ symbol }: LiveDataViewProps) {
-  const [marketData, setMarketData] = useState<any>(null);
-  const [trades, setTrades] = useState<any[]>([]);
+  const { ticker, trades, isConnected } = useMarketData();
   const [timeframe, setTimeframe] = useState('5m');
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const [market, tradesData] = await Promise.all([
-          getMarketData(symbol),
-          getRecentTrades(symbol),
-        ]);
-        setMarketData(market);
-        setTrades(tradesData.trades);
-      } catch (error) {
-        console.error('Failed to load live data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const marketData = ticker ? {
+    price: parseFloat(ticker.mark_price),
+    change24h: 0, // Placeholder as ticker doesn't have 24h change percentage directly usually
+    high24h: parseFloat(ticker.high_24h),
+    low24h: parseFloat(ticker.low_24h),
+    volume24h: parseFloat(ticker.volume_24h),
+    trades24h: 0
+  } : null;
 
-    loadData();
-  }, [symbol]);
+  const loading = !isConnected && !marketData;
 
   const timeframes = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
@@ -47,7 +36,7 @@ export function LiveDataView({ symbol }: LiveDataViewProps) {
         <CardContent>
           {loading ? (
             <div className="text-center text-muted-foreground py-8">
-              Loading market data...
+              Waiting for live data...
             </div>
           ) : marketData ? (
             <div className="grid grid-cols-2 gap-8">
@@ -57,27 +46,10 @@ export function LiveDataView({ symbol }: LiveDataViewProps) {
                   ${marketData.price.toFixed(2)}
                 </div>
                 <div className="flex items-center gap-2 mt-2">
-                  {marketData.change24h >= 0 ? (
-                    <>
-                      <TrendingUp className="h-5 w-5 text-green-500" />
-                      <span className="text-2xl font-semibold text-green-500">
-                        +${(marketData.price * (marketData.change24h / 100)).toFixed(2)}
-                      </span>
-                      <span className="text-lg text-green-500">
-                        (+{marketData.change24h.toFixed(2)}%)
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <TrendingDown className="h-5 w-5 text-red-500" />
-                      <span className="text-2xl font-semibold text-red-500">
-                        -${Math.abs(marketData.price * (marketData.change24h / 100)).toFixed(2)}
-                      </span>
-                      <span className="text-lg text-red-500">
-                        ({marketData.change24h.toFixed(2)}%)
-                      </span>
-                    </>
-                  )}
+                  {/* Change logic is simplified here as we don't have 24h change % in ticker stream yet */}
+                  <span className="text-lg text-muted-foreground">
+                    Live Updates
+                  </span>
                 </div>
               </div>
 
@@ -109,10 +81,10 @@ export function LiveDataView({ symbol }: LiveDataViewProps) {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase font-semibold">
-                    24h Trades
+                    Trades
                   </p>
                   <p className="text-xl font-bold text-foreground font-mono mt-1">
-                    {marketData.trades24h.toLocaleString()}
+                    {trades.length}
                   </p>
                 </div>
               </div>
@@ -127,11 +99,10 @@ export function LiveDataView({ symbol }: LiveDataViewProps) {
           <button
             key={tf}
             onClick={() => setTimeframe(tf)}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              timeframe === tf
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${timeframe === tf
                 ? 'bg-blue-500 text-white'
                 : 'bg-card border border-border/40 text-foreground hover:bg-accent'
-            }`}
+              }`}
           >
             {tf}
           </button>
@@ -143,11 +114,8 @@ export function LiveDataView({ symbol }: LiveDataViewProps) {
         <CardHeader>
           <CardTitle>Price Chart</CardTitle>
         </CardHeader>
-        <CardContent className="flex items-center justify-center h-full">
-          <div className="text-center text-muted-foreground">
-            <p className="text-lg font-semibold">Chart visualization</p>
-            <p className="text-sm">Candlestick chart for {timeframe} timeframe</p>
-          </div>
+        <CardContent>
+          <PriceChart />
         </CardContent>
       </Card>
 
@@ -164,22 +132,23 @@ export function LiveDataView({ symbol }: LiveDataViewProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {trades.slice(0, 10).map((trade, idx) => (
+            {trades.map((trade, idx) => (
               <div key={idx} className="flex items-center justify-between text-sm py-2 border-b border-border/40 last:border-b-0">
-                <span className="text-muted-foreground font-mono">{trade.time}</span>
+                <span className="text-muted-foreground font-mono">
+                  {new Date(trade.timestamp).toLocaleTimeString()}
+                </span>
                 <span
-                  className={`font-mono font-semibold ${
-                    trade.side === 'BUY' ? 'text-green-500' : 'text-red-500'
-                  }`}
+                  className={`font-mono font-semibold ${trade.side === 'buy' ? 'text-green-500' : 'text-red-500'
+                    }`}
                 >
                   ${trade.price.toFixed(2)}
                 </span>
                 <span className="text-muted-foreground font-mono">
-                  {trade.amount.toFixed(2)} BTC
+                  {trade.size.toFixed(4)}
                 </span>
                 <Badge
-                  variant={trade.side === 'BUY' ? 'default' : 'destructive'}
-                  className="text-xs"
+                  variant={trade.side === 'buy' ? 'default' : 'destructive'}
+                  className="text-xs uppercase"
                 >
                   {trade.side}
                 </Badge>

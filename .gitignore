@@ -10,3 +10,5 @@ package-lock.json
 uploads
 fileDescriptions.json
 shared/dist/
+__pycache__/
+*.pyc

@@ -2,9 +2,10 @@ import UserService from '../../services/userService';
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import { ALL_ROLES } from 'shared';
+import { IUser } from '../../models/User';
 
-interface AuthRequest extends Request {
-  user?: Record<string, unknown>;
+export interface AuthRequest extends Request {
+  user?: IUser;
 }
 
 const requireUser = (allowedRoles: string[] = ALL_ROLES) => {
@@ -14,6 +15,9 @@ const requireUser = (allowedRoles: string[] = ALL_ROLES) => {
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET!) as jwt.JwtPayload;
+      if (!decoded.sub) {
+        return res.status(401).json({ error: 'Invalid token payload' });
+      }
       const user = await UserService.get(decoded.sub);
       if (!user) {
         return res.status(401).json({ error: 'User not found' });

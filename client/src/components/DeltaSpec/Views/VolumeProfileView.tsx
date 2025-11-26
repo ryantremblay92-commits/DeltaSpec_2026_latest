@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { getVolumeProfile } from '@/api/volumeProfile';
+import { useMarketData } from '@/hooks/useMarketData';
 
 interface VolumeProfileViewProps {
   symbol: string;
@@ -11,24 +11,47 @@ interface VolumeProfileViewProps {
 export function VolumeProfileView({ symbol }: VolumeProfileViewProps) {
   const [profileType, setProfileType] = useState('session');
   const [valueArea, setValueArea] = useState(70);
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { trades, ticker, isConnected } = useMarketData();
+  const [volumeProfile, setVolumeProfile] = useState<any>(null);
 
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const result = await getVolumeProfile(symbol, profileType, valueArea);
-        setData(result);
-      } catch (error) {
-        console.error('Failed to load volume profile:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (trades.length > 0 && ticker) {
+      // Calculate volume profile from trades
+      const priceVolumes: Record<number, number> = {};
+      let totalVolume = 0;
 
-    loadData();
-  }, [symbol, profileType, valueArea]);
+      trades.forEach(trade => {
+        const price = Math.floor(parseFloat(trade.price));
+        const size = parseFloat(trade.size) || 0;
+        priceVolumes[price] = (priceVolumes[price] || 0) + size;
+        totalVolume += size;
+      });
+
+      // Find POC (Point of Control - highest volume price)
+      let poc = 0;
+      let maxVolume = 0;
+      Object.entries(priceVolumes).forEach(([price, volume]) => {
+        if (volume > maxVolume) {
+          maxVolume = volume;
+          poc = parseFloat(price);
+        }
+      });
+
+      // Calculate VWAP
+      let sumPriceVolume = 0;
+      trades.forEach(trade => {
+        sumPriceVolume += parseFloat(trade.price) * parseFloat(trade.size);
+      });
+      const vwap = totalVolume > 0 ? sumPriceVolume / totalVolume : 0;
+
+      // Estimate VAH and VAL (simplified)
+      const currentPrice = parseFloat(ticker.mark_price);
+      const vah = currentPrice * 1.01; // 1% above current
+      const val = currentPrice * 0.99; // 1% below current
+
+      setVolumeProfile({ poc, vah, val, vwap });
+    }
+  }, [trades, ticker]);
 
   return (
     <div className="space-y-6">
@@ -72,11 +95,11 @@ export function VolumeProfileView({ symbol }: VolumeProfileViewProps) {
       </Card>
 
       {/* Key Levels */}
-      {loading ? (
+      {!isConnected && !volumeProfile ? (
         <div className="text-center text-muted-foreground py-8">
-          Loading volume profile...
+          Waiting for volume profile data...
         </div>
-      ) : data ? (
+      ) : volumeProfile ? (
         <>
           <div className="grid grid-cols-4 gap-4">
             {/* POC */}
@@ -88,7 +111,7 @@ export function VolumeProfileView({ symbol }: VolumeProfileViewProps) {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-blue-500 font-mono">
-                  ${data.poc.toFixed(2)}
+                  ${volumeProfile.poc.toFixed(2)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Highest volume price
@@ -105,7 +128,7 @@ export function VolumeProfileView({ symbol }: VolumeProfileViewProps) {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-500 font-mono">
-                  ${data.vah.toFixed(2)}
+                  ${volumeProfile.vah.toFixed(2)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Upper {valueArea}% boundary
@@ -122,7 +145,7 @@ export function VolumeProfileView({ symbol }: VolumeProfileViewProps) {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-500 font-mono">
-                  ${data.val.toFixed(2)}
+                  ${volumeProfile.val.toFixed(2)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Lower {valueArea}% boundary
@@ -139,7 +162,7 @@ export function VolumeProfileView({ symbol }: VolumeProfileViewProps) {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-purple-500 font-mono">
-                  ${data.vwap.toFixed(2)}
+                  ${volumeProfile.vwap.toFixed(2)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Volume weighted avg
@@ -158,6 +181,7 @@ export function VolumeProfileView({ symbol }: VolumeProfileViewProps) {
                 <div className="text-center text-muted-foreground">
                   <p className="font-semibold">Horizontal Bar Chart</p>
                   <p className="text-sm">Volume distribution by price level</p>
+                  <p className="text-xs mt-2">Based on {trades.length} recent trades</p>
                 </div>
               </div>
             </CardContent>
