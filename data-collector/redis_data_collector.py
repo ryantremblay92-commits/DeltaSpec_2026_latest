@@ -10,15 +10,15 @@ from datetime import datetime, timezone
 from collections import deque
 import requests
 
-from analytics.cumulative_delta import compute_cumulative_delta
-from analytics.footprint import (
+from .analytics.cumulative_delta import compute_cumulative_delta
+from .analytics.footprint import (
     save_aggregated_footprint,
     save_footprint_snapshot,          # ✅ fixed import
     compute_footprint,
     compute_volume_imbalance,
 )
 
-from utils.config import CONFIG
+from .utils.config import CONFIG
 from dotenv import load_dotenv
 import os
 # === LOAD ENV ===
