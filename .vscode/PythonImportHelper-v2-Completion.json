@@ -1,0 +1,501 @@
+[
+    {
+        "label": "json",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "json",
+        "description": "json",
+        "detail": "json",
+        "documentation": {}
+    },
+    {
+        "label": "defaultdict",
+        "importPath": "collections",
+        "description": "collections",
+        "isExtraImport": true,
+        "detail": "collections",
+        "documentation": {}
+    },
+    {
+        "label": "deque",
+        "importPath": "collections",
+        "description": "collections",
+        "isExtraImport": true,
+        "detail": "collections",
+        "documentation": {}
+    },
+    {
+        "label": "websocket",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "websocket",
+        "description": "websocket",
+        "detail": "websocket",
+        "documentation": {}
+    },
+    {
+        "label": "threading",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "threading",
+        "description": "threading",
+        "detail": "threading",
+        "documentation": {}
+    },
+    {
+        "label": "time",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "time",
+        "description": "time",
+        "detail": "time",
+        "documentation": {}
+    },
+    {
+        "label": "logging",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "logging",
+        "description": "logging",
+        "detail": "logging",
+        "documentation": {}
+    },
+    {
+        "label": "redis",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "redis",
+        "description": "redis",
+        "detail": "redis",
+        "documentation": {}
+    },
+    {
+        "label": "sqlite3",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "sqlite3",
+        "description": "sqlite3",
+        "detail": "sqlite3",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "timezone",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "requests",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "requests",
+        "description": "requests",
+        "detail": "requests",
+        "documentation": {}
+    },
+    {
+        "label": "load_dotenv",
+        "importPath": "dotenv",
+        "description": "dotenv",
+        "isExtraImport": true,
+        "detail": "dotenv",
+        "documentation": {}
+    },
+    {
+        "label": "os",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "os",
+        "description": "os",
+        "detail": "os",
+        "documentation": {}
+    },
+    {
+        "label": "sys",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "sys",
+        "description": "sys",
+        "detail": "sys",
+        "documentation": {}
+    },
+    {
+        "label": "_Known",
+        "kind": 6,
+        "importPath": "client.node_modules.flatted.python.flatted",
+        "description": "client.node_modules.flatted.python.flatted",
+        "peekOfCode": "class _Known:\n    def __init__(self):\n        self.key = []\n        self.value = []\nclass _String:\n    def __init__(self, value):\n        self.value = value\ndef _array_keys(value):\n    keys = []\n    i = 0",
+        "detail": "client.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "_String",
+        "kind": 6,
+        "importPath": "client.node_modules.flatted.python.flatted",
+        "description": "client.node_modules.flatted.python.flatted",
+        "peekOfCode": "class _String:\n    def __init__(self, value):\n        self.value = value\ndef _array_keys(value):\n    keys = []\n    i = 0\n    for _ in value:\n        keys.append(i)\n        i += 1\n    return keys",
+        "detail": "client.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "parse",
+        "kind": 2,
+        "importPath": "client.node_modules.flatted.python.flatted",
+        "description": "client.node_modules.flatted.python.flatted",
+        "peekOfCode": "def parse(value, *args, **kwargs):\n    json = _json.loads(value, *args, **kwargs)\n    wrapped = []\n    for value in json:\n        wrapped.append(_wrap(value))\n    input = []\n    for value in wrapped:\n        if isinstance(value, _String):\n            input.append(value.value)\n        else:",
+        "detail": "client.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "stringify",
+        "kind": 2,
+        "importPath": "client.node_modules.flatted.python.flatted",
+        "description": "client.node_modules.flatted.python.flatted",
+        "peekOfCode": "def stringify(value, *args, **kwargs):\n    known = _Known()\n    input = []\n    output = []\n    i = int(_index(known, input, value))\n    while i < len(input):\n        output.append(_transform(known, input, input[i]))\n        i += 1\n    return _json.dumps(output, *args, **kwargs)",
+        "detail": "client.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "_Known",
+        "kind": 6,
+        "importPath": "client.node_modules.shared.node_modules.flatted.python.flatted",
+        "description": "client.node_modules.shared.node_modules.flatted.python.flatted",
+        "peekOfCode": "class _Known:\n    def __init__(self):\n        self.key = []\n        self.value = []\nclass _String:\n    def __init__(self, value):\n        self.value = value\ndef _array_keys(value):\n    keys = []\n    i = 0",
+        "detail": "client.node_modules.shared.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "_String",
+        "kind": 6,
+        "importPath": "client.node_modules.shared.node_modules.flatted.python.flatted",
+        "description": "client.node_modules.shared.node_modules.flatted.python.flatted",
+        "peekOfCode": "class _String:\n    def __init__(self, value):\n        self.value = value\ndef _array_keys(value):\n    keys = []\n    i = 0\n    for _ in value:\n        keys.append(i)\n        i += 1\n    return keys",
+        "detail": "client.node_modules.shared.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "parse",
+        "kind": 2,
+        "importPath": "client.node_modules.shared.node_modules.flatted.python.flatted",
+        "description": "client.node_modules.shared.node_modules.flatted.python.flatted",
+        "peekOfCode": "def parse(value, *args, **kwargs):\n    json = _json.loads(value, *args, **kwargs)\n    wrapped = []\n    for value in json:\n        wrapped.append(_wrap(value))\n    input = []\n    for value in wrapped:\n        if isinstance(value, _String):\n            input.append(value.value)\n        else:",
+        "detail": "client.node_modules.shared.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "stringify",
+        "kind": 2,
+        "importPath": "client.node_modules.shared.node_modules.flatted.python.flatted",
+        "description": "client.node_modules.shared.node_modules.flatted.python.flatted",
+        "peekOfCode": "def stringify(value, *args, **kwargs):\n    known = _Known()\n    input = []\n    output = []\n    i = int(_index(known, input, value))\n    while i < len(input):\n        output.append(_transform(known, input, input[i]))\n        i += 1\n    return _json.dumps(output, *args, **kwargs)",
+        "detail": "client.node_modules.shared.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "compute_cumulative_delta",
+        "kind": 2,
+        "importPath": "data-collector.analytics.cumulative_delta",
+        "description": "data-collector.analytics.cumulative_delta",
+        "peekOfCode": "def compute_cumulative_delta(trades):\n    return []",
+        "detail": "data-collector.analytics.cumulative_delta",
+        "documentation": {}
+    },
+    {
+        "label": "save_aggregated_footprint",
+        "kind": 2,
+        "importPath": "data-collector.analytics.footprint",
+        "description": "data-collector.analytics.footprint",
+        "peekOfCode": "def save_aggregated_footprint(trades, ts):\n    pass\ndef save_footprint_snapshot(fp, imb, ts):\n    pass\ndef compute_footprint(trades):\n    \"\"\"\n    Aggregates trades into footprint data (price levels with bid/ask volume).\n    \"\"\"\n    if not trades:\n        return []",
+        "detail": "data-collector.analytics.footprint",
+        "documentation": {}
+    },
+    {
+        "label": "save_footprint_snapshot",
+        "kind": 2,
+        "importPath": "data-collector.analytics.footprint",
+        "description": "data-collector.analytics.footprint",
+        "peekOfCode": "def save_footprint_snapshot(fp, imb, ts):\n    pass\ndef compute_footprint(trades):\n    \"\"\"\n    Aggregates trades into footprint data (price levels with bid/ask volume).\n    \"\"\"\n    if not trades:\n        return []\n    levels = defaultdict(lambda: {\"bid_volume\": 0.0, \"ask_volume\": 0.0})\n    for trade in trades:",
+        "detail": "data-collector.analytics.footprint",
+        "documentation": {}
+    },
+    {
+        "label": "compute_footprint",
+        "kind": 2,
+        "importPath": "data-collector.analytics.footprint",
+        "description": "data-collector.analytics.footprint",
+        "peekOfCode": "def compute_footprint(trades):\n    \"\"\"\n    Aggregates trades into footprint data (price levels with bid/ask volume).\n    \"\"\"\n    if not trades:\n        return []\n    levels = defaultdict(lambda: {\"bid_volume\": 0.0, \"ask_volume\": 0.0})\n    for trade in trades:\n        price = float(trade['price'])\n        size = float(trade['size'])",
+        "detail": "data-collector.analytics.footprint",
+        "documentation": {}
+    },
+    {
+        "label": "compute_volume_imbalance",
+        "kind": 2,
+        "importPath": "data-collector.analytics.footprint",
+        "description": "data-collector.analytics.footprint",
+        "peekOfCode": "def compute_volume_imbalance(trades):\n    \"\"\"\n    Computes volume imbalance from trades.\n    \"\"\"\n    if not trades:\n        return {}\n    buy_vol = sum(float(t['size']) for t in trades if t['side'] == 'buy')\n    sell_vol = sum(float(t['size']) for t in trades if t['side'] == 'sell')\n    return {\n        \"bid_imbalance\": sell_vol,",
+        "detail": "data-collector.analytics.footprint",
+        "documentation": {}
+    },
+    {
+        "label": "CONFIG",
+        "kind": 5,
+        "importPath": "data-collector.utils.config",
+        "description": "data-collector.utils.config",
+        "peekOfCode": "CONFIG = {\n    \"sqlite_path\": \"delta_data.db\",\n    \"redis_host\": \"localhost\",\n    \"redis_port\": 6379,\n    \"footprint_min_trades\": 5,\n    \"footprint_min_seconds\": 2\n}",
+        "detail": "data-collector.utils.config",
+        "documentation": {}
+    },
+    {
+        "label": "DeltaDataCollector",
+        "kind": 6,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "class DeltaDataCollector:\n    def __init__(self):\n        self.ws = None\n        self.running = True\n        self.last_trade_timestamp = 0\n        self.trade_buffer = deque(maxlen=2000)  # bigger buffer helps footprint aggregation\n        self.last_ticker_time = 0\n        # throttling for footprint persistence\n        self.last_footprint_save_time = 0.0\n    # ---------- internal helpers ----------    ",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "save_to_sql",
+        "kind": 2,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "def save_to_sql(table, entry_id, entry):\n    \"\"\"Generic SQLite insert wrapper\"\"\"\n    try:\n        with db_lock:\n            cursor = conn.cursor()\n            if table == \"tickers\":\n                cursor.execute(\"\"\"\n                INSERT OR IGNORE INTO tickers (id, timestamp, symbol, mark_price, spot_price,\n                                               best_bid, best_ask, high_24h, low_24h, volume_24h, funding_rate)\n                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "SYMBOL",
+        "kind": 5,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "SYMBOL = \"ETHUSD\"\nWS_URL = \"wss://socket.delta.exchange\"\nREST_TRADES_URL = f\"https://api.delta.exchange/v2/trades/{SYMBOL}\"\nREDIS_HOST = CONFIG.get(\"redis_host\", \"localhost\")\nREDIS_PORT = CONFIG.get(\"redis_port\", 6379)\nREDIS_MAXLEN = 5000\n# Footprint persistence throttling\nFOOTPRINT_MIN_TRADES = int(CONFIG.get(\"footprint_min_trades\", 120))   # save only when enough trades\nFOOTPRINT_MIN_SECONDS = float(CONFIG.get(\"footprint_min_seconds\", 5)) # and at least X seconds since last save\n# === LOGGING ===",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "WS_URL",
+        "kind": 5,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "WS_URL = \"wss://socket.delta.exchange\"\nREST_TRADES_URL = f\"https://api.delta.exchange/v2/trades/{SYMBOL}\"\nREDIS_HOST = CONFIG.get(\"redis_host\", \"localhost\")\nREDIS_PORT = CONFIG.get(\"redis_port\", 6379)\nREDIS_MAXLEN = 5000\n# Footprint persistence throttling\nFOOTPRINT_MIN_TRADES = int(CONFIG.get(\"footprint_min_trades\", 120))   # save only when enough trades\nFOOTPRINT_MIN_SECONDS = float(CONFIG.get(\"footprint_min_seconds\", 5)) # and at least X seconds since last save\n# === LOGGING ===\nlogging.basicConfig(",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "REST_TRADES_URL",
+        "kind": 5,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "REST_TRADES_URL = f\"https://api.delta.exchange/v2/trades/{SYMBOL}\"\nREDIS_HOST = CONFIG.get(\"redis_host\", \"localhost\")\nREDIS_PORT = CONFIG.get(\"redis_port\", 6379)\nREDIS_MAXLEN = 5000\n# Footprint persistence throttling\nFOOTPRINT_MIN_TRADES = int(CONFIG.get(\"footprint_min_trades\", 120))   # save only when enough trades\nFOOTPRINT_MIN_SECONDS = float(CONFIG.get(\"footprint_min_seconds\", 5)) # and at least X seconds since last save\n# === LOGGING ===\nlogging.basicConfig(\n    format='[%(asctime)s] [%(levelname)s] %(message)s',",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "REDIS_HOST",
+        "kind": 5,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "REDIS_HOST = CONFIG.get(\"redis_host\", \"localhost\")\nREDIS_PORT = CONFIG.get(\"redis_port\", 6379)\nREDIS_MAXLEN = 5000\n# Footprint persistence throttling\nFOOTPRINT_MIN_TRADES = int(CONFIG.get(\"footprint_min_trades\", 120))   # save only when enough trades\nFOOTPRINT_MIN_SECONDS = float(CONFIG.get(\"footprint_min_seconds\", 5)) # and at least X seconds since last save\n# === LOGGING ===\nlogging.basicConfig(\n    format='[%(asctime)s] [%(levelname)s] %(message)s',\n    level=logging.INFO",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "REDIS_PORT",
+        "kind": 5,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "REDIS_PORT = CONFIG.get(\"redis_port\", 6379)\nREDIS_MAXLEN = 5000\n# Footprint persistence throttling\nFOOTPRINT_MIN_TRADES = int(CONFIG.get(\"footprint_min_trades\", 120))   # save only when enough trades\nFOOTPRINT_MIN_SECONDS = float(CONFIG.get(\"footprint_min_seconds\", 5)) # and at least X seconds since last save\n# === LOGGING ===\nlogging.basicConfig(\n    format='[%(asctime)s] [%(levelname)s] %(message)s',\n    level=logging.INFO\n)",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "REDIS_MAXLEN",
+        "kind": 5,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "REDIS_MAXLEN = 5000\n# Footprint persistence throttling\nFOOTPRINT_MIN_TRADES = int(CONFIG.get(\"footprint_min_trades\", 120))   # save only when enough trades\nFOOTPRINT_MIN_SECONDS = float(CONFIG.get(\"footprint_min_seconds\", 5)) # and at least X seconds since last save\n# === LOGGING ===\nlogging.basicConfig(\n    format='[%(asctime)s] [%(levelname)s] %(message)s',\n    level=logging.INFO\n)\n# === REDIS CONNECTION ===",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "FOOTPRINT_MIN_TRADES",
+        "kind": 5,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "FOOTPRINT_MIN_TRADES = int(CONFIG.get(\"footprint_min_trades\", 120))   # save only when enough trades\nFOOTPRINT_MIN_SECONDS = float(CONFIG.get(\"footprint_min_seconds\", 5)) # and at least X seconds since last save\n# === LOGGING ===\nlogging.basicConfig(\n    format='[%(asctime)s] [%(levelname)s] %(message)s',\n    level=logging.INFO\n)\n# === REDIS CONNECTION ===\nr = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)\n# === SQLITE CONNECTION ===",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "FOOTPRINT_MIN_SECONDS",
+        "kind": 5,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "FOOTPRINT_MIN_SECONDS = float(CONFIG.get(\"footprint_min_seconds\", 5)) # and at least X seconds since last save\n# === LOGGING ===\nlogging.basicConfig(\n    format='[%(asctime)s] [%(levelname)s] %(message)s',\n    level=logging.INFO\n)\n# === REDIS CONNECTION ===\nr = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)\n# === SQLITE CONNECTION ===\ndb_file_path = CONFIG.get(\"sqlite_path\")",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "r",
+        "kind": 5,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)\n# === SQLITE CONNECTION ===\ndb_file_path = CONFIG.get(\"sqlite_path\")\nconn = sqlite3.connect(db_file_path, check_same_thread=False)\ndb_lock = threading.Lock()\ncursor = conn.cursor()\n# === CREATE TABLES ===\ncursor.execute(\"\"\"\nCREATE TABLE IF NOT EXISTS tickers (\n    id TEXT PRIMARY KEY,",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "db_file_path",
+        "kind": 5,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "db_file_path = CONFIG.get(\"sqlite_path\")\nconn = sqlite3.connect(db_file_path, check_same_thread=False)\ndb_lock = threading.Lock()\ncursor = conn.cursor()\n# === CREATE TABLES ===\ncursor.execute(\"\"\"\nCREATE TABLE IF NOT EXISTS tickers (\n    id TEXT PRIMARY KEY,\n    timestamp TEXT,\n    symbol TEXT,",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "conn",
+        "kind": 5,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "conn = sqlite3.connect(db_file_path, check_same_thread=False)\ndb_lock = threading.Lock()\ncursor = conn.cursor()\n# === CREATE TABLES ===\ncursor.execute(\"\"\"\nCREATE TABLE IF NOT EXISTS tickers (\n    id TEXT PRIMARY KEY,\n    timestamp TEXT,\n    symbol TEXT,\n    mark_price REAL,",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "db_lock",
+        "kind": 5,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "db_lock = threading.Lock()\ncursor = conn.cursor()\n# === CREATE TABLES ===\ncursor.execute(\"\"\"\nCREATE TABLE IF NOT EXISTS tickers (\n    id TEXT PRIMARY KEY,\n    timestamp TEXT,\n    symbol TEXT,\n    mark_price REAL,\n    spot_price REAL,",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "cursor",
+        "kind": 5,
+        "importPath": "data-collector.redis_data_collector",
+        "description": "data-collector.redis_data_collector",
+        "peekOfCode": "cursor = conn.cursor()\n# === CREATE TABLES ===\ncursor.execute(\"\"\"\nCREATE TABLE IF NOT EXISTS tickers (\n    id TEXT PRIMARY KEY,\n    timestamp TEXT,\n    symbol TEXT,\n    mark_price REAL,\n    spot_price REAL,\n    best_bid REAL,",
+        "detail": "data-collector.redis_data_collector",
+        "documentation": {}
+    },
+    {
+        "label": "_Known",
+        "kind": 6,
+        "importPath": "server.node_modules.flatted.python.flatted",
+        "description": "server.node_modules.flatted.python.flatted",
+        "peekOfCode": "class _Known:\n    def __init__(self):\n        self.key = []\n        self.value = []\nclass _String:\n    def __init__(self, value):\n        self.value = value\ndef _array_keys(value):\n    keys = []\n    i = 0",
+        "detail": "server.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "_String",
+        "kind": 6,
+        "importPath": "server.node_modules.flatted.python.flatted",
+        "description": "server.node_modules.flatted.python.flatted",
+        "peekOfCode": "class _String:\n    def __init__(self, value):\n        self.value = value\ndef _array_keys(value):\n    keys = []\n    i = 0\n    for _ in value:\n        keys.append(i)\n        i += 1\n    return keys",
+        "detail": "server.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "parse",
+        "kind": 2,
+        "importPath": "server.node_modules.flatted.python.flatted",
+        "description": "server.node_modules.flatted.python.flatted",
+        "peekOfCode": "def parse(value, *args, **kwargs):\n    json = _json.loads(value, *args, **kwargs)\n    wrapped = []\n    for value in json:\n        wrapped.append(_wrap(value))\n    input = []\n    for value in wrapped:\n        if isinstance(value, _String):\n            input.append(value.value)\n        else:",
+        "detail": "server.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "stringify",
+        "kind": 2,
+        "importPath": "server.node_modules.flatted.python.flatted",
+        "description": "server.node_modules.flatted.python.flatted",
+        "peekOfCode": "def stringify(value, *args, **kwargs):\n    known = _Known()\n    input = []\n    output = []\n    i = int(_index(known, input, value))\n    while i < len(input):\n        output.append(_transform(known, input, input[i]))\n        i += 1\n    return _json.dumps(output, *args, **kwargs)",
+        "detail": "server.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "_Known",
+        "kind": 6,
+        "importPath": "server.node_modules.shared.node_modules.flatted.python.flatted",
+        "description": "server.node_modules.shared.node_modules.flatted.python.flatted",
+        "peekOfCode": "class _Known:\n    def __init__(self):\n        self.key = []\n        self.value = []\nclass _String:\n    def __init__(self, value):\n        self.value = value\ndef _array_keys(value):\n    keys = []\n    i = 0",
+        "detail": "server.node_modules.shared.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "_String",
+        "kind": 6,
+        "importPath": "server.node_modules.shared.node_modules.flatted.python.flatted",
+        "description": "server.node_modules.shared.node_modules.flatted.python.flatted",
+        "peekOfCode": "class _String:\n    def __init__(self, value):\n        self.value = value\ndef _array_keys(value):\n    keys = []\n    i = 0\n    for _ in value:\n        keys.append(i)\n        i += 1\n    return keys",
+        "detail": "server.node_modules.shared.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "parse",
+        "kind": 2,
+        "importPath": "server.node_modules.shared.node_modules.flatted.python.flatted",
+        "description": "server.node_modules.shared.node_modules.flatted.python.flatted",
+        "peekOfCode": "def parse(value, *args, **kwargs):\n    json = _json.loads(value, *args, **kwargs)\n    wrapped = []\n    for value in json:\n        wrapped.append(_wrap(value))\n    input = []\n    for value in wrapped:\n        if isinstance(value, _String):\n            input.append(value.value)\n        else:",
+        "detail": "server.node_modules.shared.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "stringify",
+        "kind": 2,
+        "importPath": "server.node_modules.shared.node_modules.flatted.python.flatted",
+        "description": "server.node_modules.shared.node_modules.flatted.python.flatted",
+        "peekOfCode": "def stringify(value, *args, **kwargs):\n    known = _Known()\n    input = []\n    output = []\n    i = int(_index(known, input, value))\n    while i < len(input):\n        output.append(_transform(known, input, input[i]))\n        i += 1\n    return _json.dumps(output, *args, **kwargs)",
+        "detail": "server.node_modules.shared.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "_Known",
+        "kind": 6,
+        "importPath": "shared.node_modules.flatted.python.flatted",
+        "description": "shared.node_modules.flatted.python.flatted",
+        "peekOfCode": "class _Known:\n    def __init__(self):\n        self.key = []\n        self.value = []\nclass _String:\n    def __init__(self, value):\n        self.value = value\ndef _array_keys(value):\n    keys = []\n    i = 0",
+        "detail": "shared.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "_String",
+        "kind": 6,
+        "importPath": "shared.node_modules.flatted.python.flatted",
+        "description": "shared.node_modules.flatted.python.flatted",
+        "peekOfCode": "class _String:\n    def __init__(self, value):\n        self.value = value\ndef _array_keys(value):\n    keys = []\n    i = 0\n    for _ in value:\n        keys.append(i)\n        i += 1\n    return keys",
+        "detail": "shared.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "parse",
+        "kind": 2,
+        "importPath": "shared.node_modules.flatted.python.flatted",
+        "description": "shared.node_modules.flatted.python.flatted",
+        "peekOfCode": "def parse(value, *args, **kwargs):\n    json = _json.loads(value, *args, **kwargs)\n    wrapped = []\n    for value in json:\n        wrapped.append(_wrap(value))\n    input = []\n    for value in wrapped:\n        if isinstance(value, _String):\n            input.append(value.value)\n        else:",
+        "detail": "shared.node_modules.flatted.python.flatted",
+        "documentation": {}
+    },
+    {
+        "label": "stringify",
+        "kind": 2,
+        "importPath": "shared.node_modules.flatted.python.flatted",
+        "description": "shared.node_modules.flatted.python.flatted",
+        "peekOfCode": "def stringify(value, *args, **kwargs):\n    known = _Known()\n    input = []\n    output = []\n    i = int(_index(known, input, value))\n    while i < len(input):\n        output.append(_transform(known, input, input[i]))\n        i += 1\n    return _json.dumps(output, *args, **kwargs)",
+        "detail": "shared.node_modules.flatted.python.flatted",
+        "documentation": {}
+    }
+]
