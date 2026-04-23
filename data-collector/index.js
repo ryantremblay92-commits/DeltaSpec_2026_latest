@@ -2,7 +2,7 @@ const express = require('express');
 const { PythonShell } = require('python-shell');
 
 const app = express();
-const port = 3001;
+const port = 3002;
 
 let pyshell;
 

@@ -10,15 +10,15 @@ from datetime import datetime, timezone
 from collections import deque
 import requests
 
-from .analytics.cumulative_delta import compute_cumulative_delta
-from .analytics.footprint import (
+from analytics.cumulative_delta import compute_cumulative_delta
+from analytics.footprint import (
     save_aggregated_footprint,
-    save_footprint_snapshot,          # ✅ fixed import
+    save_footprint_snapshot,
     compute_footprint,
     compute_volume_imbalance,
 )
 
-from .utils.config import CONFIG
+from utils.config import CONFIG
 from dotenv import load_dotenv
 import os
 # === LOAD ENV ===
@@ -100,24 +100,6 @@ CREATE TABLE IF NOT EXISTS footprint_data (
     ask_volume REAL,
     delta REAL,
     imbalance REAL
-)
-""")
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS orderbook_pressure (
-    timestamp TEXT PRIMARY KEY,
-    bid_pressure REAL,
-    ask_pressure REAL,
-    imbalance REAL
-)
-""")
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS llm_responses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp TEXT,
-    mode TEXT,
-    signals_json TEXT,
-    response TEXT,
-    model_name TEXT
 )
 """)
 cursor.execute("""
@@ -229,12 +211,6 @@ def save_to_sql(table, entry_id, entry):
                     source TEXT
                 )
                 """)
-            elif table == "orderbook_pressure":
-                cursor.execute("""
-                INSERT OR REPLACE INTO orderbook_pressure (timestamp, bid_pressure, ask_pressure, imbalance)
-                VALUES (?, ?, ?, ?)
-                """, (...))
-
 
             conn.commit()
 
@@ -255,53 +231,52 @@ class DeltaDataCollector:
 
     # ---------- internal helpers ----------    
     def _persist_footprint_if_due(self, reason: str = ""):
-            
-            """
+        """
         Persist aggregated footprint rows and a raw snapshot if:
         - we have at least FOOTPRINT_MIN_TRADES in buffer, and
         - it's been at least FOOTPRINT_MIN_SECONDS since last save.
         Also republishes footprint + imbalance into Redis so dashboard charts can see them.
-            """
-            now = time.time()
-            if len(self.trade_buffer) < FOOTPRINT_MIN_TRADES:
-                return
-            if (now - self.last_footprint_save_time) < FOOTPRINT_MIN_SECONDS:
-                return
+        """
+        now = time.time()
+        if len(self.trade_buffer) < FOOTPRINT_MIN_TRADES:
+            return
+        if (now - self.last_footprint_save_time) < FOOTPRINT_MIN_SECONDS:
+            return
 
-            ts = datetime.utcnow().isoformat()
-            try:
-                trades_copy = deque(list(self.trade_buffer))
+        ts = datetime.utcnow().isoformat()
+        try:
+            trades_copy = deque(list(self.trade_buffer))
 
-                # --- SQLite persistence ---
-                save_aggregated_footprint(trades_copy, ts=ts)
+            # --- SQLite persistence ---
+            save_aggregated_footprint(trades_copy, ts=ts)
 
-                fp = compute_footprint(trades_copy)
-                imb = compute_volume_imbalance(trades_copy)
-                save_footprint_snapshot(fp, imb, ts=ts)   # ✅ fixed call
+            fp = compute_footprint(trades_copy)
+            imb = compute_volume_imbalance(trades_copy)
+            save_footprint_snapshot(fp, imb, ts=ts)
 
-                # --- Redis republish (for dashboard) ---
-                if fp:
-                    for row in fp:
-                        redis_entry = {
-                            "ts": ts,
-                            "price_level": row.get("price_level"),
-                            "bid_volume": row.get("bid_volume"),
-                            "ask_volume": row.get("ask_volume"),
-                            "delta": row.get("delta"),
-                            "imbalance": row.get("imbalance"),
-                        }
-                        r.xadd("delta_footprint", redis_entry, maxlen=REDIS_MAXLEN)
+            # --- Redis republish (for dashboard) ---
+            if fp:
+                for row in fp:
+                    redis_entry = {
+                        "ts": ts,
+                        "price_level": row.get("price_level"),
+                        "bid_volume": row.get("bid_volume"),
+                        "ask_volume": row.get("ask_volume"),
+                        "delta": row.get("delta"),
+                        "imbalance": row.get("imbalance"),
+                    }
+                    r.xadd("delta_footprint", redis_entry, maxlen=REDIS_MAXLEN)
 
-                if imb:
-                    redis_imb = {"ts": ts}
-                    redis_imb.update(imb)
-                    r.xadd("delta_volume_imbalance", redis_imb, maxlen=REDIS_MAXLEN)
+            if imb:
+                redis_imb = {"ts": ts}
+                redis_imb.update(imb)
+                r.xadd("delta_volume_imbalance", redis_imb, maxlen=REDIS_MAXLEN)
 
-                self.last_footprint_save_time = now
-                logging.info(f"[FOOTPRINT] Saved snapshot ({reason}) with {len(trades_copy)} trades")
+            self.last_footprint_save_time = now
+            logging.info(f"[FOOTPRINT] Saved snapshot ({reason}) with {len(trades_copy)} trades")
 
-            except Exception as e:
-                logging.error(f"[FOOTPRINT] Persist error: {e}")        
+        except Exception as e:
+            logging.error(f"[FOOTPRINT] Persist error: {e}")        
 
 
     # ---------- websocket handlers ----------
@@ -411,7 +386,7 @@ class DeltaDataCollector:
                             "interval_delta": None
                         }
                         r.xadd("delta_cumulative_delta", cd_entry, maxlen=REDIS_MAXLEN)
-                        save_to_sql("cumulative_delta", last_cd[0], cd_.entry)
+                        save_to_sql("cumulative_delta", last_cd[0], cd_entry)
                         logging.info(f"[CUM_DELTA] Δ: {last_cd[1]:.2f}")
 
                 # === FOOTPRINT PERSISTENCE (rate-limited) ===
