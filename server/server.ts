@@ -33,7 +33,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Database connection
-connectDB();
+connectDB().catch(err => {
+  console.error('Failed to connect to database:', err);
+  process.exit(1);
+});
 
 // Socket.io setup
 const io = new Server(httpServer, {

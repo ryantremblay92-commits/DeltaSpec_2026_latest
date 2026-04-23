@@ -11,7 +11,7 @@ import { ExportDataView } from './Views/ExportDataView';
 import { LLMGuidanceView } from './Views/LLMGuidanceView';
 
 export function Dashboard() {
-  const [currentSymbol, setCurrentSymbol] = useState('BTC/USDT');
+  const [currentSymbol, setCurrentSymbol] = useState('ETHUSDT');
   const [activeTab, setActiveTab] = useState('live-data');
   const [isConnected, setIsConnected] = useState(true);
 

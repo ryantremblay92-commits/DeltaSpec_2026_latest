@@ -6,7 +6,7 @@ import logging
 import redis
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from collections import deque
 import requests
 
@@ -25,9 +25,9 @@ import os
 load_dotenv()
 
 # === CONFIGURATION ===
-SYMBOL = "ETHUSD"
+SYMBOL = "ETHUSDT"
 WS_URL = "wss://socket.delta.exchange"
-REST_TRADES_URL = f"https://api.delta.exchange/v2/trades/{SYMBOL}"
+REST_TRADES_URL = f"https://api.india.delta.exchange/v2/trades/{SYMBOL}"
 REDIS_HOST = CONFIG.get("redis_host", "localhost")
 REDIS_PORT = CONFIG.get("redis_port", 6379)
 REDIS_MAXLEN = 5000
@@ -336,7 +336,7 @@ class DeltaDataCollector:
                 logging.info(f"[TICKER] {entry}")
 
             # === TRADES ===
-            elif msg_type == "v2/trades":
+            elif msg_type in ("v2/trades", "all_trades"):
                 trades = data.get("data") or []
                 for trade in trades:
                     ts = datetime.fromtimestamp(
@@ -383,7 +383,7 @@ class DeltaDataCollector:
                         cd_entry = {
                             "timestamp": last_cd[0],
                             "cumulative_delta": last_cd[1],
-                            "interval_delta": None
+                            "interval_delta": last_cd[2]  # Fixed: was None, now uses actual interval delta
                         }
                         r.xadd("delta_cumulative_delta", cd_entry, maxlen=REDIS_MAXLEN)
                         save_to_sql("cumulative_delta", last_cd[0], cd_entry)
@@ -391,6 +391,41 @@ class DeltaDataCollector:
 
                 # === FOOTPRINT PERSISTENCE (rate-limited) ===
                 self._persist_footprint_if_due(reason="WS batch")
+
+                # === FORCE GENERATE SOME TEST DATA FOR DEMO ===
+                # This will be removed once real trade data accumulates
+                if len(self.trade_buffer) >= 5:  # Have enough trades for analysis
+                    fp = compute_footprint(self.trade_buffer)
+                    imb = compute_volume_imbalance(self.trade_buffer)
+                    cd = compute_cumulative_delta(self.trade_buffer)
+
+                    if fp:
+                        # Publish footprint to Redis for dashboard
+                        for row in fp[:10]:  # Limit to first 10 levels for demo
+                            redis_entry = {
+                                "ts": datetime.utcnow().isoformat(),
+                                "price_level": row.get("price_level"),
+                                "bid_volume": row.get("bid_volume"),
+                                "ask_volume": row.get("ask_volume"),
+                                "delta": row.get("delta"),
+                                "imbalance": row.get("imbalance"),
+                            }
+                            r.xadd("delta_footprint", redis_entry, maxlen=REDIS_MAXLEN)
+
+                    if imb:
+                        redis_imb = {"ts": datetime.utcnow().isoformat()}
+                        redis_imb.update(imb)
+                        r.xadd("delta_volume_imbalance", redis_imb, maxlen=REDIS_MAXLEN)
+
+                    if cd:
+                        # Publish latest cumulative delta
+                        last_cd = cd[-1]
+                        cd_entry = {
+                            "timestamp": last_cd[0],
+                            "cumulative_delta": str(last_cd[1]),
+                            "interval_delta": str(last_cd[2])
+                        }
+                        r.xadd("delta_cumulative_delta", cd_entry, maxlen=REDIS_MAXLEN)
 
         except Exception as e:
             logging.error(f"[ERROR] Failed to process WS message: {e}")
@@ -408,7 +443,7 @@ class DeltaDataCollector:
                 "channels": [
                     {"name": "l2_orderbook", "symbols": [SYMBOL]},
                     {"name": "v2/ticker", "symbols": [SYMBOL]},
-                    {"name": "v2/trades", "symbols": [SYMBOL]},
+                    {"name": "all_trades", "symbols": [SYMBOL]},
                 ]
             },
         }

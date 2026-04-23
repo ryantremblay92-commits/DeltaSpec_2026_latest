@@ -1,10 +1,58 @@
 from collections import defaultdict
 
 def save_aggregated_footprint(trades, ts):
-    pass
+    """
+    Save aggregated footprint data to SQLite.
+    """
+    import sqlite3
+    from utils.config import CONFIG
+
+    db_file_path = CONFIG.get("sqlite_path")
+    conn = sqlite3.connect(db_file_path)
+    cursor = conn.cursor()
+
+    # Save each footprint level
+    for trade in trades:
+        cursor.execute("""
+            INSERT OR REPLACE INTO footprint_data
+            (ts, price_level, bid_volume, ask_volume, delta, imbalance)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            ts,
+            trade.get('price_level', 0),
+            trade.get('bid_volume', 0),
+            trade.get('ask_volume', 0),
+            trade.get('delta', 0),
+            trade.get('imbalance', 0)
+        ))
+
+    conn.commit()
+    conn.close()
 
 def save_footprint_snapshot(fp, imb, ts):
-    pass
+    """
+    Save footprint snapshot to SQLite.
+    """
+    import sqlite3
+    from utils.config import CONFIG
+
+    db_file_path = CONFIG.get("sqlite_path")
+    conn = sqlite3.connect(db_file_path)
+    cursor = conn.cursor()
+
+    # Save raw footprint snapshot (could be JSON or structured data)
+    cursor.execute("""
+        INSERT OR REPLACE INTO footprint_snapshots
+        (timestamp, footprint_data, imbalance_data)
+        VALUES (?, ?, ?)
+    """, (
+        ts,
+        str(fp) if fp else None,
+        str(imb) if imb else None
+    ))
+
+    conn.commit()
+    conn.close()
 
 def compute_footprint(trades):
     """

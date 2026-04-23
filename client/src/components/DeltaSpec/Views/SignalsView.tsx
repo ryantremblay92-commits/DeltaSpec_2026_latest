@@ -16,29 +16,51 @@ export function SignalsView({ symbol }: SignalsViewProps) {
   const [signals, setSignals] = useState<any[]>([]);
   const [performance, setPerformance] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const [signalsData, perfData, historyData] = await Promise.all([
-          getActiveSignals(filters, sensitivity),
-          getSignalPerformance(),
-          getSignalHistory(page),
-        ]);
-        setSignals(signalsData.signals);
-        setPerformance(perfData);
-        setHistory(historyData.signals);
-      } catch (error) {
-        console.error('Failed to load signals:', error);
-      } finally {
-        setLoading(false);
-      }
+    // Load mock signals data for demonstration
+    const mockSignals = [
+      {
+        id: 1,
+        type: 'buy',
+        symbol: 'ETHUSDT',
+        price: 2300.50,
+        reason: 'Support level breakout',
+        confidence: 0.85,
+        timestamp: new Date().toISOString(),
+      },
+      {
+        id: 2,
+        type: 'sell',
+        symbol: 'ETHUSDT',
+        price: 2350.25,
+        reason: 'Resistance level rejection',
+        confidence: 0.78,
+        timestamp: new Date().toISOString(),
+      },
+      {
+        id: 3,
+        type: 'warning',
+        symbol: 'ETHUSDT',
+        price: 2325.75,
+        reason: 'High volatility detected',
+        confidence: 0.92,
+        timestamp: new Date().toISOString(),
+      },
+    ];
+
+    const mockPerformance = {
+      totalSignals: 1247,
+      winRate: 68.5,
+      avgGain: 2.34,
+      activeNow: 3,
     };
 
-    loadData();
+    setSignals(mockSignals);
+    setPerformance(mockPerformance);
+    setHistory(mockSignals);
   }, [filters, sensitivity, page]);
 
   const toggleFilter = (filter: string) => {

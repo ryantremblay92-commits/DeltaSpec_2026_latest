@@ -19,47 +19,21 @@ interface FootprintLevel {
 
 export function FootprintView({ symbol }: FootprintViewProps) {
   const [intensity, setIntensity] = useState(50);
-  const [minVolume, setMinVolume] = useState(0); // Set to 0 to ensure data visibility
+  const [minVolume, setMinVolume] = useState(0); // Minimum volume threshold
   const { footprint, volumeImbalance, isConnected } = useMarketData();
   const [footprintMap, setFootprintMap] = useState<Map<number, FootprintLevel>>(new Map());
 
   // Accumulate footprint data
   useEffect(() => {
-    if (footprint && footprint.price_level) {
+    if (footprint) {
+      setFootprintMap(new Map());
       setFootprintMap((prev) => {
         const newMap = new Map(prev);
-        const price = parseFloat(footprint.price_level);
-
-        // Update or create level
-        const current = newMap.get(price) || {
-          price,
-          bidVolume: 0,
-          askVolume: 0,
-          delta: 0,
-          timestamp: Date.now()
-        };
-
-        // Since the stream sends "current state" or "updates", we might want to replace or add.
-        // Assuming the stream sends the *latest* aggregated value for that price level from the collector:
-        // "redis_entry = { ... bid_volume: row.get("bid_volume") ... }"
-        // It looks like it sends the snapshot for that level.
-
-        newMap.set(price, {
-          price,
-          bidVolume: parseFloat(footprint.bid_volume || 0),
-          askVolume: parseFloat(footprint.ask_volume || 0),
-          delta: parseFloat(footprint.delta || 0),
-          timestamp: Date.now()
+        // Convert array to Map
+        footprint.forEach((item) => {
+          const price = item.price_level;
+          newMap.set(price, item);
         });
-
-        // Cleanup old levels (keep last 100 levels)
-        if (newMap.size > 100) {
-          const sortedKeys = Array.from(newMap.keys()).sort((a, b) => b - a);
-          // Keep the ones around the current price? Or just recent?
-          // For now, let's just keep the most recently updated ones if we needed to prune, 
-          // but 100 levels is fine for React.
-        }
-
         return newMap;
       });
     }
@@ -68,6 +42,7 @@ export function FootprintView({ symbol }: FootprintViewProps) {
   const sortedLevels = useMemo(() => {
     return Array.from(footprintMap.values())
       .filter(level => (level.bidVolume + level.askVolume) >= minVolume)
+      .sort((a, b) => b.price - a.price) // Sort by price descending
       .sort((a, b) => b.price - a.price);
   }, [footprintMap, minVolume]);
 
@@ -186,9 +161,10 @@ export function FootprintView({ symbol }: FootprintViewProps) {
                 </div>
                 <div className="max-h-[500px] overflow-y-auto">
                   {sortedLevels.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      No data meeting filter criteria
-                    </div>
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No footprint data available</p>
+              <p className="text-sm mt-2">Data will appear when trades are processed</p>
+            </div>
                   ) : (
                     sortedLevels.map((level) => {
                       const totalVol = level.bidVolume + level.askVolume;
