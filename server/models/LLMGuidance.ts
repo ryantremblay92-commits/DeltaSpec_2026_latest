@@ -9,6 +9,8 @@ export interface ILLMGuidance extends Document {
     confidence: number;
     summary: string;
     keyPoints: string[];
+    liquidationRisk?: string;
+    openInterestTrend?: 'increasing' | 'decreasing' | 'stable';
   };
   recommendations: {
     action: 'buy' | 'sell' | 'hold';
@@ -56,6 +58,11 @@ const LLMGuidanceSchema = new Schema<ILLMGuidance>({
       required: true,
     },
     keyPoints: [String],
+    liquidationRisk: String,
+    openInterestTrend: {
+      type: String,
+      enum: ['increasing', 'decreasing', 'stable'],
+    },
   },
   recommendations: {
     action: {

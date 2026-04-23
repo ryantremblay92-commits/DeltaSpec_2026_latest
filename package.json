@@ -5,7 +5,7 @@
   "scripts": {
     "postinstall": "npm run shared-install && concurrently -n \"client,server\" \"npm run client-install\" \"npm run server-install\"",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "concurrently -n \"shared,client,server\" \"npm run shared-dev\" \"npm run client\" \"npm run server\"",
+    "dev": "concurrently -n \"shared,client,server,data\" \"npm run shared-dev\" \"npm run client\" \"npm run server\" \"python data-collector/redis_data_collector.py\"",
     "client": "cd client && npm run dev",
     "client-install": "cd client && npm install",
     "server": "cd server && npm run dev",

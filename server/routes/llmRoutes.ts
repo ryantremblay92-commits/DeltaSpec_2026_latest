@@ -34,6 +34,51 @@ router.post('/chat', requireUser(), async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Description: Send a message to the LLM trading assistant and get a streamed response
+// Endpoint: POST /api/llm/chat/stream
+// Request: { message: string, symbol?: string }
+// Response: Server-Sent Events (SSE)
+router.post('/chat/stream', requireUser(), async (req: AuthRequest, res: Response) => {
+  try {
+    const { message, symbol } = req.body;
+
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'Message is required and must be a string' });
+    }
+
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+    console.log('[LLM Routes] POST /api/llm/chat/stream:', { userId: req.user._id, symbol, messageLength: message.length });
+
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const stream = LLMController.streamChatMessage(
+      req.user._id.toString(),
+      message,
+      symbol
+    );
+
+    for await (const data of stream) {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    }
+    
+    res.end();
+  } catch (error: any) {
+    console.error('[LLM Routes] Error in POST /api/llm/chat/stream:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message || 'Failed to send message' });
+    } else {
+      res.write(`data: ${JSON.stringify({ error: error.message || 'Failed to send message' })}\n\n`);
+      res.end();
+    }
+  }
+});
+
 // Description: Get AI-generated trading guidance for a symbol
 // Endpoint: GET /api/llm/guidance
 // Request: { symbol: string } (query parameter)

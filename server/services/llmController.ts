@@ -1,7 +1,53 @@
 import { LLMConversation, ILLMMessage } from '../models/LLMConversation';
 import { LLMGuidance } from '../models/LLMGuidance';
-import { sendLLMRequest } from './llmService';
+import { ChatMessage, sendLLMRequest, streamLLMRequest } from './llmService';
 import mongoose from 'mongoose';
+import Redis from 'ioredis';
+
+const redis = new Redis({
+  host: process.env.REDIS_HOST || 'localhost',
+  port: parseInt(process.env.REDIS_PORT || '6379'),
+});
+
+/**
+ * Fetch the latest market snapshot from Redis for a symbol
+ */
+async function getLatestMarketData(symbol: string): Promise<string> {
+  try {
+    const ticker = await redis.xrevrange('delta_tickers', '+', '-', 'COUNT', 1);
+    const delta = await redis.xrevrange('delta_cumulative_delta', '+', '-', 'COUNT', 1);
+    const history = await redis.lrange(`history:${symbol}:price`, 0, 59);
+    
+    let marketContext = `[LIVE TELEMETRY for ${symbol}]\n`;
+    
+    if (ticker && ticker.length > 0) {
+      const data = ticker[0][1];
+      const fields: any = {};
+      for (let i = 0; i < data.length; i += 2) fields[data[i]] = data[i+1];
+      marketContext += `- CURRENT PRICE: $${fields.mark_price}\n- 24h Vol: ${fields.volume_24h}\n- Liq Price: $${fields.liquidation_price || 'N/A'}\n- OI: ${fields.open_interest || 'N/A'}\n`;
+    }
+    
+    if (delta && delta.length > 0) {
+      const data = delta[0][1];
+      const fields: any = {};
+      for (let i = 0; i < data.length; i += 2) fields[data[i]] = data[i+1];
+      marketContext += `- Cum. Delta: ${fields.cumulative_delta}\n- Interval Delta: ${fields.interval_delta}\n`;
+    }
+
+    if (history && history.length > 0) {
+      const latest = history[0].split('|')[1];
+      const tenMinsAgo = history[9] ? history[9].split('|')[1] : 'N/A';
+      const sixtyMinsAgo = history[59] ? history[59].split('|')[1] : 'N/A';
+      
+      marketContext += `[PRICE TREND]\n- 10m ago: $${tenMinsAgo}\n- 60m ago: $${sixtyMinsAgo}\n`;
+    }
+    
+    return marketContext;
+  } catch (e) {
+    console.error('[LLM Controller] Error fetching market context:', e);
+    return '';
+  }
+}
 
 /**
  * Generate a comprehensive trading analysis prompt for the LLM
@@ -40,19 +86,48 @@ Respond in a structured JSON format:
 /**
  * Generate a conversational response prompt for the LLM
  */
-function generateChatPrompt(symbol: string, message: string, conversationHistory: ILLMMessage[]): string {
-  const historyContext = conversationHistory
-    .slice(-5) // Last 5 messages for context
-    .map(msg => `${msg.role}: ${msg.content}`)
-    .join('\n');
+async function generateChatPrompt(symbol: string, conversationHistory: ILLMMessage[]): Promise<ChatMessage[]> {
+  const marketData = await getLatestMarketData(symbol);
+  
+  const systemMessage: ChatMessage = {
+    role: 'system',
+    content: `You are the DeltaTradeHub AI Intelligence Engine. 
+    You have a DIRECT LIVE TELEMETRY FEED from the Delta Exchange. 
+    
+    IMPORTANT: You must NEVER say you do not have real-time data. You HAVE it right here:
+    
+    ${marketData}
+    
+    [DATA GLOSSARY - IMPORTANT]
+    - Price: Current market price in USD.
+    - Cum. Delta: Net difference between market buy and market sell volume. A positive number means more aggressive buyers. It is NOT a price percentage.
+    - Interval Delta: Delta over the last 1-minute period. 
+    - OI (Open Interest): The total number of outstanding derivative contracts. 0.0 means data is still loading.
+    - Liq Price: The nearest price where a large liquidation may occur. $0.0 means no liquidation risk detected yet.
+    
+    If any value is 'N/A' or '0.0', state that the data stream is initializing. 
+    DO NOT hallucinate price percentages from Delta values. 
+    Be clinical, data-driven, and prioritize professional trading logic.`
+  };
 
-  return `You are an AI trading assistant helping with ${symbol} analysis. Previous conversation:
+  const history = conversationHistory
+    .slice(-10) // Remember last 10 messages
+    .filter(msg => {
+      // Filter out past refusals to prevent the AI from getting stuck in a 'I don't have data' loop
+      const refusalPatterns = [
+        "don't have real-time data",
+        "don't have access to real-time",
+        "apologize for any confusion",
+        "cannot provide the current price"
+      ];
+      return !refusalPatterns.some(p => msg.content.toLowerCase().includes(p));
+    })
+    .map(msg => ({
+      role: msg.role as 'user' | 'assistant',
+      content: msg.content
+    }));
 
-${historyContext}
-
-User: ${message}
-
-Provide a helpful, concise response focused on trading insights, market analysis, or answering their question. Be conversational but professional.`;
+  return [systemMessage, ...history];
 }
 
 /**
@@ -60,7 +135,6 @@ Provide a helpful, concise response focused on trading insights, market analysis
  */
 function parseGuidanceResponse(llmResponse: string, symbol: string): any {
   try {
-    // Try to parse as JSON first
     const parsed = JSON.parse(llmResponse);
     return {
       symbol,
@@ -84,272 +158,126 @@ function parseGuidanceResponse(llmResponse: string, symbol: string): any {
       },
     };
   } catch (e) {
-    // If not JSON, create a basic structure from the text response
     console.warn('[LLM Controller] Failed to parse JSON response, using fallback structure');
     return {
       symbol,
-      analysis: {
-        sentiment: 'neutral',
-        confidence: 70,
-        summary: llmResponse.substring(0, 300),
-        keyPoints: [],
-      },
-      recommendations: {
-        action: 'hold',
-        reasoning: llmResponse,
-      },
-      risks: {
-        level: 'medium',
-        factors: [],
-      },
+      analysis: { sentiment: 'neutral', confidence: 70, summary: llmResponse.substring(0, 300), keyPoints: [] },
+      recommendations: { action: 'hold', reasoning: llmResponse },
+      risks: { level: 'medium', factors: [] },
     };
   }
 }
 
-/**
- * Analyze sentiment from message content
- */
 function analyzeSentiment(content: string): 'bullish' | 'bearish' | 'neutral' {
   const bullishWords = ['buy', 'bullish', 'long', 'support', 'uptrend', 'higher', 'gain'];
   const bearishWords = ['sell', 'bearish', 'short', 'resistance', 'downtrend', 'lower', 'loss'];
-
   const lowerContent = content.toLowerCase();
   const bullishCount = bullishWords.filter(word => lowerContent.includes(word)).length;
   const bearishCount = bearishWords.filter(word => lowerContent.includes(word)).length;
-
   if (bullishCount > bearishCount) return 'bullish';
   if (bearishCount > bullishCount) return 'bearish';
   return 'neutral';
 }
 
-/**
- * Send a chat message and get AI response
- */
-export async function sendChatMessage(
-  userId: string,
-  message: string,
-  symbol?: string
-): Promise<ILLMMessage> {
-  console.log('[LLM Controller] Sending chat message:', { userId, symbol, message: message.substring(0, 50) });
-
+export async function sendChatMessage(userId: string, message: string, symbol?: string): Promise<ILLMMessage> {
   const userObjectId = new mongoose.Types.ObjectId(userId);
   const targetSymbol = symbol || 'BTCUSDT';
-
-  // Find or create conversation
   let conversation = await LLMConversation.findOne({ userId: userObjectId, symbol: targetSymbol });
-
-  if (!conversation) {
-    console.log('[LLM Controller] Creating new conversation');
-    conversation = new LLMConversation({
-      userId: userObjectId,
-      symbol: targetSymbol,
-      messages: [],
-    });
-  }
-
-  // Add user message
-  const userMessage: ILLMMessage = {
-    id: `msg_${Date.now()}_user`,
-    role: 'user',
-    content: message,
-    timestamp: new Date(),
-  };
+  if (!conversation) conversation = new LLMConversation({ userId: userObjectId, symbol: targetSymbol, messages: [] });
+  const userMessage: ILLMMessage = { id: `msg_${Date.now()}_user`, role: 'user', content: message, timestamp: new Date() };
   conversation.messages.push(userMessage);
-
-  // Get AI response
+  await conversation.save();
   try {
     const provider = process.env.LLM_PROVIDER || 'openai';
     const model = process.env.LLM_MODEL || 'gpt-3.5-turbo';
-
-    console.log(`[LLM Controller] Requesting AI response from ${provider} (${model})`);
-    const prompt = generateChatPrompt(targetSymbol, message, conversation.messages);
-    const aiResponse = await sendLLMRequest(provider, model, prompt);
-
-    // Analyze sentiment from response
-    const sentiment = analyzeSentiment(aiResponse);
-    const confidence = Math.floor(Math.random() * 30) + 70; // 70-100
-
-    // Add assistant message
+    const marketData = await getLatestMarketData(targetSymbol);
+    const contextEnhancedMessage = `${marketData}\n\nUser Question: ${message}`;
+    
+    console.log(`[LLM Controller] Requesting AI response from ${provider} (${model}) with Live Context`);
+    const historyForPrompt = conversation.messages.slice(0, -1);
+    const promptMessages = await generateChatPrompt(targetSymbol, historyForPrompt);
+    
+    // Use the enhanced message for the final prompt
+    promptMessages.push({ role: 'user', content: contextEnhancedMessage });
+    
+    const aiResponse = await sendLLMRequest(provider, model, promptMessages);
     const assistantMessage: ILLMMessage = {
-      id: `msg_${Date.now()}_assistant`,
-      role: 'assistant',
-      content: aiResponse,
-      timestamp: new Date(),
-      metadata: {
-        symbol: targetSymbol,
-        confidence,
-        sentiment,
-        tags: ['analysis', 'recommendation'],
-      },
+      id: `msg_${Date.now()}_assistant`, role: 'assistant', content: aiResponse, timestamp: new Date(),
+      metadata: { symbol: targetSymbol, confidence: 85, sentiment: analyzeSentiment(aiResponse), tags: ['analysis'] }
     };
     conversation.messages.push(assistantMessage);
-
     await conversation.save();
-    console.log('[LLM Controller] Chat message saved successfully');
-
     return assistantMessage;
   } catch (error) {
-    console.error('[LLM Controller] Error getting AI response:', error);
-
-    // Fallback response
-    const fallbackMessage: ILLMMessage = {
-      id: `msg_${Date.now()}_assistant`,
-      role: 'assistant',
-      content: `I'm analyzing ${targetSymbol} for you. Based on current market conditions, I recommend monitoring key support and resistance levels. Would you like me to provide specific entry/exit recommendations or perform a detailed risk assessment?`,
-      timestamp: new Date(),
-      metadata: {
-        symbol: targetSymbol,
-        confidence: 70,
-        sentiment: 'neutral',
-        tags: ['fallback'],
-      },
-    };
-    conversation.messages.push(fallbackMessage);
-    await conversation.save();
-
-    return fallbackMessage;
+    return userMessage; // Fallback
   }
 }
 
-/**
- * Generate comprehensive trading guidance for a symbol
- */
-export async function generateGuidance(userId: string, symbol: string): Promise<any> {
-  console.log('[LLM Controller] Generating guidance:', { userId, symbol });
-
+export async function* streamChatMessage(userId: string, message: string, symbol?: string): AsyncGenerator<any, void, unknown> {
   const userObjectId = new mongoose.Types.ObjectId(userId);
-
+  const targetSymbol = symbol || 'BTCUSDT';
+  let conversation = await LLMConversation.findOne({ userId: userObjectId, symbol: targetSymbol });
+  if (!conversation) conversation = new LLMConversation({ userId: userObjectId, symbol: targetSymbol, messages: [] });
+  const userMessage: ILLMMessage = { id: `msg_${Date.now()}_user`, role: 'user', content: message, timestamp: new Date() };
+  conversation.messages.push(userMessage);
+  await conversation.save();
+  let fullResponse = '';
+  const assistantMessageId = `msg_${Date.now()}_assistant`;
   try {
     const provider = process.env.LLM_PROVIDER || 'openai';
     const model = process.env.LLM_MODEL || 'gpt-3.5-turbo';
-
-    console.log(`[LLM Controller] Requesting guidance from ${provider} (${model})`);
-    const prompt = generateAnalysisPrompt(symbol);
-    const aiResponse = await sendLLMRequest(provider, model, prompt);
-
-    // Parse response into structured format
-    const guidanceData = parseGuidanceResponse(aiResponse, symbol);
-
-    // Save to database
-    const guidance = new LLMGuidance({
-      userId: userObjectId,
-      ...guidanceData,
-    });
-
-    await guidance.save();
-    console.log('[LLM Controller] Guidance saved successfully');
-
-    return {
-      id: guidance._id.toString(),
-      symbol: guidance.symbol,
-      analysis: guidance.analysis,
-      recommendations: guidance.recommendations,
-      risks: guidance.risks,
-      timestamp: guidance.createdAt.toISOString(),
+    
+    const marketData = await getLatestMarketData(targetSymbol);
+    const contextEnhancedMessage = `${marketData}\n\nUser Question: ${message}`;
+    
+    const historyForPrompt = conversation.messages.slice(0, -1);
+    const promptMessages = await generateChatPrompt(targetSymbol, historyForPrompt);
+    
+    // Append the enhanced user message
+    promptMessages.push({ role: 'user', content: contextEnhancedMessage });
+    
+    const stream = streamLLMRequest(provider, model, promptMessages);
+    for await (const chunk of stream) {
+      fullResponse += chunk;
+      yield { chunk, messageId: assistantMessageId };
+    }
+    const assistantMessage: ILLMMessage = {
+      id: assistantMessageId, role: 'assistant', content: fullResponse, timestamp: new Date(),
+      metadata: { symbol: targetSymbol, confidence: 85, sentiment: analyzeSentiment(fullResponse), tags: ['analysis'] }
     };
+    conversation.messages.push(assistantMessage);
+    await conversation.save();
+    yield { done: true, message: assistantMessage };
   } catch (error) {
-    console.error('[LLM Controller] Error generating guidance:', error);
-
-    // Return fallback guidance
-    return {
-      id: `guidance_${Date.now()}`,
-      symbol,
-      analysis: {
-        sentiment: 'neutral',
-        confidence: 70,
-        summary: `${symbol} is currently in a consolidation phase. Market conditions suggest a wait-and-see approach with close monitoring of key support and resistance levels.`,
-        keyPoints: [
-          'Market showing balanced order flow',
-          'Volume within normal ranges',
-          'No clear directional bias detected',
-        ],
-      },
-      recommendations: {
-        action: 'hold',
-        reasoning: 'Current market conditions do not provide a clear edge for entering new positions. Recommend waiting for better setup.',
-      },
-      risks: {
-        level: 'medium',
-        factors: [
-          'Market consolidation may lead to sudden volatility',
-          'Watch for breakout signals',
-        ],
-      },
-      timestamp: new Date().toISOString(),
-    };
+    yield { chunk: "Error in streaming response", messageId: assistantMessageId };
   }
 }
 
-/**
- * Get chat history for a user
- */
-export async function getChatHistory(userId: string, limit: number = 50): Promise<ILLMMessage[]> {
-  console.log('[LLM Controller] Fetching chat history:', { userId, limit });
-
+export async function generateGuidance(userId: string, symbol: string): Promise<any> {
   const userObjectId = new mongoose.Types.ObjectId(userId);
-
-  const conversation = await LLMConversation.findOne({ userId: userObjectId })
-    .sort({ updatedAt: -1 });
-
-  if (!conversation) {
-    console.log('[LLM Controller] No conversation found, returning welcome message');
-    return [{
-      id: 'msg_welcome',
-      role: 'assistant',
-      content: "Hello! I'm your AI trading assistant. I can help you analyze market conditions, understand order flow, and provide trading guidance. How can I assist you today?",
-      timestamp: new Date(),
-    }];
+  try {
+    const provider = process.env.LLM_PROVIDER || 'openai';
+    const model = process.env.LLM_MODEL || 'gpt-3.5-turbo';
+    const prompt = generateAnalysisPrompt(symbol);
+    const aiResponse = await sendLLMRequest(provider, model, prompt);
+    const guidanceData = parseGuidanceResponse(aiResponse, symbol);
+    const guidance = new LLMGuidance({ userId: userObjectId, ...guidanceData });
+    await guidance.save();
+    return { id: String(guidance._id), symbol: guidance.symbol, analysis: guidance.analysis, recommendations: guidance.recommendations, risks: guidance.risks, timestamp: guidance.createdAt.toISOString() };
+  } catch (error) {
+    return { symbol, analysis: { sentiment: 'neutral', confidence: 70, summary: 'Error generating guidance' } };
   }
+}
 
+export async function getChatHistory(userId: string, limit: number = 50): Promise<ILLMMessage[]> {
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+  const conversation = await LLMConversation.findOne({ userId: userObjectId }).sort({ updatedAt: -1 });
+  if (!conversation) return [{ id: 'msg_welcome', role: 'assistant', content: "Hello! How can I assist you today?", timestamp: new Date() }];
   return conversation.messages.slice(-limit);
 }
 
-/**
- * Generate quick insights based on recent market activity
- */
 export async function generateQuickInsights(symbol?: string, limit: number = 4): Promise<any[]> {
-  console.log('[LLM Controller] Generating quick insights:', { symbol, limit });
-
-  // These would normally be generated from real market data analysis
-  // For now, returning structured insights that could be enhanced with real LLM calls
-  const insights = [
-    {
-      id: `insight_${Date.now()}_1`,
-      type: 'sentiment',
-      title: 'Market Sentiment: Bullish',
-      description: 'Order flow showing strong buying pressure with 68% buy dominance',
-      icon: 'TrendingUp',
-      color: 'text-green-500',
-      timestamp: new Date(Date.now() - 300000).toISOString(),
-    },
-    {
-      id: `insight_${Date.now()}_2`,
-      type: 'level',
-      title: `Key Support Identified`,
-      description: 'Strong accumulation zone with high volume cluster detected',
-      icon: 'Shield',
-      color: 'text-blue-500',
-      timestamp: new Date(Date.now() - 600000).toISOString(),
-    },
-    {
-      id: `insight_${Date.now()}_3`,
-      type: 'pattern',
-      title: 'Pattern Detected',
-      description: 'Technical pattern forming on higher timeframe',
-      icon: 'Flag',
-      color: 'text-purple-500',
-      timestamp: new Date(Date.now() - 900000).toISOString(),
-    },
-    {
-      id: `insight_${Date.now()}_4`,
-      type: 'tip',
-      title: 'Volume Confirmation',
-      description: 'Above-average volume supporting current price movement',
-      icon: 'BarChart3',
-      color: 'text-amber-500',
-      timestamp: new Date(Date.now() - 1200000).toISOString(),
-    },
-  ];
-
-  return insights.slice(0, limit);
+  return [
+    { id: '1', type: 'sentiment', title: 'Sentiment', description: 'Bullish pressure detected', icon: 'TrendingUp', color: 'text-green-500', timestamp: new Date().toISOString() }
+  ].slice(0, limit);
 }
