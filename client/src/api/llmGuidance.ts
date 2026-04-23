@@ -106,6 +106,90 @@ export const sendLLMMessage = async (message: string, symbol?: string): Promise<
   }
 };
 
+// Description: Stream a message to the LLM trading assistant
+// Endpoint: POST /api/llm/chat/stream
+export const streamLLMMessage = async (
+  message: string,
+  symbol: string | undefined,
+  onUpdate: (chunk: string, fullMessage: string) => void
+): Promise<LLMMessage> => {
+  try {
+    console.log('[LLM API] Sending stream message to backend:', { message: message.substring(0, 50), symbol });
+
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch('/api/llm/chat/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ message, symbol: symbol || 'BTCUSDT' })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    if (!response.body) {
+      throw new Error('Response body is null');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullResponse = '';
+    let messageObj: LLMMessage | null = null;
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop() || '';
+
+      for (const part of parts) {
+        if (part.startsWith('data: ')) {
+          try {
+            const dataStr = part.substring(6);
+            if (dataStr === '[DONE]') continue;
+            
+            const data = JSON.parse(dataStr);
+            
+            if (data.error) {
+              throw new Error(data.error);
+            }
+            
+            if (data.done && data.message) {
+              messageObj = data.message;
+            } else if (data.chunk) {
+              fullResponse += data.chunk;
+              onUpdate(data.chunk, fullResponse);
+            }
+          } catch (e) {
+            console.error('Error parsing stream data:', e);
+          }
+        }
+      }
+    }
+    
+    if (!messageObj) {
+      messageObj = {
+        id: `msg_${Date.now()}_assistant`,
+        role: 'assistant',
+        content: fullResponse,
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    return messageObj;
+  } catch (error: any) {
+    console.error('[LLM API] Error streaming message:', error);
+    throw new Error(error?.message || 'Failed to stream message');
+  }
+};
+
 // Description: Get AI-generated trading guidance for a symbol
 // Endpoint: GET /api/llm/guidance
 // Request: { symbol: string }

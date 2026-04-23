@@ -20,7 +20,7 @@ import { Badge } from '../../ui/badge';
 import { ScrollArea } from '../../ui/scroll-area';
 import { Separator } from '../../ui/separator';
 import { Skeleton } from '../../ui/skeleton';
-import { sendLLMMessage, getLLMGuidance, getQuickInsights, getChatHistory } from '../../../api/llmGuidance';
+import { streamLLMMessage, getLLMGuidance, getQuickInsights, getChatHistory } from '../../../api/llmGuidance';
 import { LLMMessage, LLMGuidance, QuickInsight } from '../../../types';
 import { QuickInsightsWidget } from './LLMGuidance/QuickInsightsWidget';
 import { GuidanceCard } from './LLMGuidance/GuidanceCard';
@@ -99,27 +99,59 @@ export const LLMGuidanceView: React.FC<LLMGuidanceViewProps> = ({ symbol }) => {
       timestamp: new Date().toISOString()
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const assistantMessageId = `msg_${Date.now()}_assistant`;
+    const initialAssistantMessage: LLMMessage = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toISOString()
+    };
+
+    setMessages(prev => [...prev, userMessage, initialAssistantMessage]);
     setInputMessage('');
     setIsLoading(true);
 
     console.log('[LLMGuidanceView] Sending message:', userMessage);
 
     try {
-      const response = await sendLLMMessage(inputMessage, symbol);
-      setMessages(prev => [...prev, response]);
-      console.log('[LLMGuidanceView] Received response:', response);
+      const finalMessage = await streamLLMMessage(userMessage.content, symbol, (chunk, fullMessage) => {
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === assistantMessageId 
+              ? { ...msg, content: fullMessage } 
+              : msg
+          )
+        );
+      });
+      
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === assistantMessageId 
+            ? finalMessage
+            : msg
+        )
+      );
+      console.log('[LLMGuidanceView] Received final response:', finalMessage);
     } catch (error) {
       console.error('[LLMGuidanceView] Failed to send message:', error);
 
-      // Add error message
-      const errorMessage: LLMMessage = {
-        id: `msg_${Date.now()}`,
-        role: 'assistant',
-        content: "I apologize, but I'm having trouble processing your request right now. Please try again in a moment.",
-        timestamp: new Date().toISOString()
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => {
+        const currentMsg = prev.find(m => m.id === assistantMessageId);
+        if (currentMsg && currentMsg.content.length > 0) {
+          // If we already have some partial text, keep it. Maybe append an error indicator.
+          return prev.map(msg => 
+            msg.id === assistantMessageId
+              ? { ...msg, content: msg.content + "\n\n[Connection interrupted]" }
+              : msg
+          );
+        }
+        
+        return prev.map(msg => 
+          msg.id === assistantMessageId
+            ? { ...msg, content: "I apologize, but I'm having trouble processing your request right now. Please try again in a moment." }
+            : msg
+        );
+      });
     } finally {
       setIsLoading(false);
     }

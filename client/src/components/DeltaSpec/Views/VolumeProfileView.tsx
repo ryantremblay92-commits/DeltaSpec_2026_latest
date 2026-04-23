@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { useMarketData } from '@/hooks/useMarketData';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface VolumeProfileViewProps {
   symbol: string;
@@ -12,50 +13,75 @@ export function VolumeProfileView({ symbol }: VolumeProfileViewProps) {
   const [profileType, setProfileType] = useState('session');
   const [valueArea, setValueArea] = useState(70);
   const { trades, ticker, isConnected } = useMarketData();
-  const [volumeProfile, setVolumeProfile] = useState<any>(null);
 
-  useEffect(() => {
-    if (trades.length > 0 && ticker) {
-      // Calculate volume profile from trades
-      const priceVolumes: Record<number, number> = {};
-      let totalVolume = 0;
+  // 1. Calculate Profile Data
+  const profileData = useMemo(() => {
+    if (trades.length === 0) return { list: [], poc: 0, vah: 0, val: 0, vwap: 0 };
 
-      trades.forEach(trade => {
-        const price = Math.floor(parseFloat(trade.price));
-        const size = parseFloat(trade.size) || 0;
-        priceVolumes[price] = (priceVolumes[price] || 0) + size;
-        totalVolume += size;
-      });
+    const priceVolumes: Record<string, number> = {};
+    let totalVol = 0;
+    let sumPV = 0;
 
-      // Find POC (Point of Control - highest volume price)
-      let poc = 0;
-      let maxVolume = 0;
-      Object.entries(priceVolumes).forEach(([price, volume]) => {
-        if (volume > maxVolume) {
-          maxVolume = volume;
-          poc = parseFloat(price);
-        }
-      });
+    trades.forEach(t => {
+      const p = parseFloat(t.price);
+      const s = parseFloat(t.size) || 0;
+      // Use $1.0 steps for high prices, $0.1 for low
+      const step = p > 1000 ? 5.0 : 0.5;
+      const rounded = (Math.round(p / step) * step).toFixed(1);
+      
+      priceVolumes[rounded] = (priceVolumes[rounded] || 0) + s;
+      totalVol += s;
+      sumPV += p * s;
+    });
 
-      // Calculate VWAP
-      let sumPriceVolume = 0;
-      trades.forEach(trade => {
-        sumPriceVolume += parseFloat(trade.price) * parseFloat(trade.size);
-      });
-      const vwap = totalVolume > 0 ? sumPriceVolume / totalVolume : 0;
+    const sortedPrices = Object.keys(priceVolumes)
+      .map(Number)
+      .sort((a, b) => a - b);
 
-      // Estimate VAH and VAL (simplified)
-      const currentPrice = parseFloat(ticker.mark_price);
-      const vah = currentPrice * 1.01; // 1% above current
-      const val = currentPrice * 0.99; // 1% below current
+    const list = sortedPrices.map(p => ({
+      price: p,
+      volume: priceVolumes[p.toFixed(1)]
+    }));
 
-      setVolumeProfile({ poc, vah, val, vwap });
+    // Find POC
+    let poc = 0;
+    let maxV = 0;
+    list.forEach(d => {
+      if (d.volume > maxV) {
+        maxV = d.volume;
+        poc = d.price;
+      }
+    });
+
+    const vwap = sumPV / totalVol;
+
+    // Proper Value Area Calculation (70% of volume centered around POC)
+    const targetVol = totalVol * (valueArea / 100);
+    let currentVol = maxV;
+    let lowIdx = list.findIndex(d => d.price === poc);
+    let highIdx = lowIdx;
+
+    while (currentVol < targetVol && (lowIdx > 0 || highIdx < list.length - 1)) {
+      const lowVol = lowIdx > 0 ? list[lowIdx - 1].volume : 0;
+      const highVol = highIdx < list.length - 1 ? list[highIdx + 1].volume : 0;
+
+      if (lowVol > highVol) {
+        lowIdx--;
+        currentVol += lowVol;
+      } else {
+        highIdx++;
+        currentVol += highVol;
+      }
     }
-  }, [trades, ticker]);
+
+    const val = list[lowIdx]?.price || 0;
+    const vah = list[highIdx]?.price || 0;
+
+    return { list, poc, vah, val, vwap };
+  }, [trades, valueArea]);
 
   return (
     <div className="space-y-6">
-      {/* Control Panel */}
       <Card className="bg-card/50 border-border/40">
         <CardHeader>
           <CardTitle>Volume Profile Controls</CardTitle>
@@ -71,123 +97,110 @@ export function VolumeProfileView({ symbol }: VolumeProfileViewProps) {
                 <SelectContent>
                   <SelectItem value="session">Session</SelectItem>
                   <SelectItem value="visible-range">Visible Range</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold">Value Area %</label>
-              <span className="text-lg font-bold text-blue-500">{valueArea}%</span>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold">Value Area %</label>
+                <span className="text-lg font-bold text-blue-500">{valueArea}%</span>
+              </div>
+              <Slider
+                value={[valueArea]}
+                onValueChange={(value) => setValueArea(value[0])}
+                min={60}
+                max={90}
+                step={1}
+                className="w-full"
+              />
             </div>
-            <Slider
-              value={[valueArea]}
-              onValueChange={(value) => setValueArea(value[0])}
-              min={60}
-              max={90}
-              step={1}
-              className="w-full"
-            />
           </div>
         </CardContent>
       </Card>
 
-      {/* Key Levels */}
-      {!isConnected && !volumeProfile ? (
+      {!isConnected && profileData.list.length === 0 ? (
         <div className="text-center text-muted-foreground py-8">
           Waiting for volume profile data...
         </div>
-      ) : volumeProfile ? (
+      ) : (
         <>
           <div className="grid grid-cols-4 gap-4">
-            {/* POC */}
-            <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xs text-muted-foreground uppercase">
-                  Point of Control
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-500 font-mono">
-                  ${volumeProfile.poc.toFixed(2)}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Highest volume price
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* VAH */}
-            <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xs text-muted-foreground uppercase">
-                  Value Area High
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-500 font-mono">
-                  ${volumeProfile.vah.toFixed(2)}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Upper {valueArea}% boundary
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* VAL */}
-            <Card className="bg-gradient-to-br from-red-500/10 to-red-500/5 border-red-500/20">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xs text-muted-foreground uppercase">
-                  Value Area Low
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-500 font-mono">
-                  ${volumeProfile.val.toFixed(2)}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Lower {valueArea}% boundary
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* VWAP */}
-            <Card className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xs text-muted-foreground uppercase">
-                  VWAP
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-purple-500 font-mono">
-                  ${volumeProfile.vwap.toFixed(2)}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Volume weighted avg
-                </p>
-              </CardContent>
-            </Card>
+            <MetricCard title="Point of Control" value={profileData.poc} color="blue" subtitle="Highest volume price" />
+            <MetricCard title="Value Area High" value={profileData.vah} color="green" subtitle={`Upper ${valueArea}% boundary`} />
+            <MetricCard title="Value Area Low" value={profileData.val} color="red" subtitle={`Lower ${valueArea}% boundary`} />
+            <MetricCard title="VWAP" value={profileData.vwap} color="purple" subtitle="Volume weighted avg" />
           </div>
 
-          {/* Chart */}
           <Card className="bg-card/50 border-border/40">
             <CardHeader>
-              <CardTitle>Volume Profile Chart</CardTitle>
+              <CardTitle>Volume Distribution</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-96 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-lg border border-border/40 flex items-center justify-center">
-                <div className="text-center text-muted-foreground">
-                  <p className="font-semibold">Horizontal Bar Chart</p>
-                  <p className="text-sm">Volume distribution by price level</p>
-                  <p className="text-xs mt-2">Based on {trades.length} recent trades</p>
-                </div>
+              <div className="h-[400px] w-full mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    layout="vertical"
+                    data={[...profileData.list].reverse()}
+                    margin={{ top: 5, right: 30, left: 60, bottom: 5 }}
+                  >
+                    <XAxis type="number" hide />
+                    <YAxis 
+                      dataKey="price" 
+                      type="category" 
+                      stroke="#888" 
+                      fontSize={10} 
+                      tickFormatter={(val) => `$${val}`}
+                      width={50}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                      contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px' }}
+                      itemStyle={{ color: '#fff' }}
+                      formatter={(val: number) => [val.toFixed(2), 'Volume']}
+                    />
+                    <Bar dataKey="volume">
+                      {[...profileData.list].reverse().map((entry, index) => {
+                        const isVA = entry.price >= profileData.val && entry.price <= profileData.vah;
+                        const isPOC = entry.price === profileData.poc;
+                        return (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={isPOC ? '#eab308' : (isVA ? '#3b82f6' : '#374151')} 
+                            fillOpacity={isVA ? 0.8 : 0.3}
+                          />
+                        );
+                      })}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
         </>
-      ) : null}
+      )}
     </div>
+  );
+}
+
+function MetricCard({ title, value, color, subtitle }: any) {
+  const colorMap: any = {
+    blue: 'from-blue-500/10 to-blue-500/5 border-blue-500/20 text-blue-500',
+    green: 'from-green-500/10 to-green-500/5 border-green-500/20 text-green-500',
+    red: 'from-red-500/10 to-red-500/5 border-red-500/20 text-red-500',
+    purple: 'from-purple-500/10 to-purple-500/5 border-purple-500/20 text-purple-500',
+  };
+
+  return (
+    <Card className={`bg-gradient-to-br ${colorMap[color].split(' text-')[0]}`}>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xs text-muted-foreground uppercase">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className={`text-2xl font-bold font-mono ${colorMap[color].split('border-')[1].split(' ')[1]}`}>
+          ${value.toFixed(2)}
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+      </CardContent>
+    </Card>
   );
 }

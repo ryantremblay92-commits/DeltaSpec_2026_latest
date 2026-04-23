@@ -1,292 +1,218 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, TrendingDown, AlertTriangle, Zap } from 'lucide-react';
-import { getActiveSignals, getSignalPerformance, getSignalHistory } from '@/api/signals';
+import { TrendingUp, TrendingDown, AlertTriangle, Zap, Activity, Sparkles } from 'lucide-react';
+import { useMarketData } from '@/hooks/useMarketData';
 import { formatDistanceToNow } from 'date-fns';
 
 interface SignalsViewProps {
   symbol: string;
 }
 
+const safeFormatDistance = (timestamp: string) => {
+  try {
+    const d = new Date(timestamp);
+    if (isNaN(d.getTime())) return 'Just now';
+    return formatDistanceToNow(d, { addSuffix: true });
+  } catch {
+    return 'Just now';
+  }
+};
+
+const getSignalIcon = (type: string) => {
+  switch (type) {
+    case 'BUY': return <TrendingUp className="h-5 w-5 text-green-500" />;
+    case 'SELL': return <TrendingDown className="h-5 w-5 text-red-500" />;
+    case 'WARNING': return <AlertTriangle className="h-5 w-5 text-orange-500" />;
+    default: return <Zap className="h-5 w-5" />;
+  }
+};
+
 export function SignalsView({ symbol }: SignalsViewProps) {
-  const [filters, setFilters] = useState(['all']);
   const [sensitivity, setSensitivity] = useState('medium');
-  const [signals, setSignals] = useState<any[]>([]);
-  const [performance, setPerformance] = useState<any>(null);
-  const [history, setHistory] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
+  const { trades, isConnected } = useMarketData();
 
-  useEffect(() => {
-    // Load mock signals data for demonstration
-    const mockSignals = [
-      {
-        id: 1,
-        type: 'buy',
-        symbol: 'ETHUSDT',
-        price: 2300.50,
-        reason: 'Support level breakout',
-        confidence: 0.85,
-        timestamp: new Date().toISOString(),
-      },
-      {
-        id: 2,
-        type: 'sell',
-        symbol: 'ETHUSDT',
-        price: 2350.25,
-        reason: 'Resistance level rejection',
-        confidence: 0.78,
-        timestamp: new Date().toISOString(),
-      },
-      {
-        id: 3,
-        type: 'warning',
-        symbol: 'ETHUSDT',
-        price: 2325.75,
-        reason: 'High volatility detected',
-        confidence: 0.92,
-        timestamp: new Date().toISOString(),
-      },
-    ];
+  // 1. Real-Time Signal Detection Engine
+  const activeSignals = useMemo(() => {
+    try {
+      if (!trades || trades.length < 5) return [];
 
-    const mockPerformance = {
-      totalSignals: 1247,
-      winRate: 68.5,
-      avgGain: 2.34,
-      activeNow: 3,
-    };
+      const signals: any[] = [];
+      const recentTrades = trades.slice(0, 20); // MarketDataContext prepends new trades
+      
+      // A. Whale Detection (> 0.5 BTC)
+      const largeTrades = recentTrades.filter(t => t && t.size && parseFloat(t.size) > 0.5);
+      largeTrades.forEach((t, i) => {
+        if (!t.price || !t.timestamp) return;
+        signals.push({
+          id: `whale-${i}-${t.timestamp}`,
+          type: t.side === 'buy' ? 'BUY' : 'SELL',
+          strength: 'High',
+          entry: parseFloat(t.price),
+          target: parseFloat(t.price) * (t.side === 'buy' ? 1.005 : 0.995),
+          stopLoss: parseFloat(t.price) * (t.side === 'buy' ? 0.998 : 1.002),
+          confidence: 85,
+          reason: `Whale ${t.side.toUpperCase()} detected: ${parseFloat(t.size).toFixed(2)} BTC`,
+          timestamp: t.timestamp
+        });
+      });
 
-    setSignals(mockSignals);
-    setPerformance(mockPerformance);
-    setHistory(mockSignals);
-  }, [filters, sensitivity, page]);
+      // B. Absorption Detection
+      const priceCounts: Record<string, number> = {};
+      recentTrades.forEach(t => {
+        if (!t || !t.price) return;
+        const p = parseFloat(t.price).toFixed(1);
+        priceCounts[p] = (priceCounts[p] || 0) + 1;
+      });
 
-  const toggleFilter = (filter: string) => {
-    if (filter === 'all') {
-      setFilters(['all']);
-    } else {
-      const newFilters = filters.includes('all')
-        ? [filter]
-        : filters.includes(filter)
-        ? filters.filter((f) => f !== filter)
-        : [...filters, filter];
-      setFilters(newFilters.length === 0 ? ['all'] : newFilters);
+      Object.entries(priceCounts).forEach(([price, count]) => {
+        if (count > 8) {
+          signals.push({
+            id: `abs-${price}`,
+            type: 'WARNING',
+            strength: 'Medium',
+            entry: parseFloat(price),
+            target: parseFloat(price) + 10,
+            stopLoss: parseFloat(price) - 10,
+            confidence: 70,
+            reason: `Price Absorption at $${price} (${count} hits)`,
+            timestamp: new Date().toISOString()
+          });
+        }
+      });
+
+      // C. Delta Momentum Shift
+      const last5 = recentTrades.slice(0, 5);
+      if (last5.length >= 4) {
+        const buyCount = last5.filter(t => t.side === 'buy').length;
+        const lastTrade = last5[0]; // Newest is at index 0
+        if (buyCount >= 4 && lastTrade && lastTrade.price) {
+          signals.push({
+            id: `mom-buy-${Date.now()}`,
+            type: 'BUY',
+            strength: 'Medium',
+            entry: parseFloat(lastTrade.price),
+            target: parseFloat(lastTrade.price) + 50,
+            stopLoss: parseFloat(lastTrade.price) - 20,
+            confidence: 65,
+            reason: 'Aggressive Buying Momentum',
+            timestamp: new Date().toISOString()
+          });
+        }
+      }
+
+      return signals.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 6);
+    } catch (err) {
+      console.error("Signal Detection Error:", err);
+      return [];
     }
-  };
-
-  const getSignalIcon = (type: string) => {
-    switch (type) {
-      case 'BUY':
-        return <TrendingUp className="h-5 w-5 text-green-500" />;
-      case 'SELL':
-        return <TrendingDown className="h-5 w-5 text-red-500" />;
-      case 'WARNING':
-        return <AlertTriangle className="h-5 w-5 text-orange-500" />;
-      default:
-        return <Zap className="h-5 w-5" />;
-    }
-  };
+  }, [trades]);
 
   return (
     <div className="space-y-6">
-      {/* Control Panel */}
-      <Card className="bg-card/50 border-border/40">
-        <CardHeader>
-          <CardTitle>Signal Filters</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      {/* Metrics Bar */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card className="bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20 shadow-lg">
+          <CardContent className="pt-4 flex items-center gap-4">
+            <div className="p-2 bg-blue-500/20 rounded-lg"><Activity className="text-blue-500 h-5 w-5" /></div>
+            <div>
+              <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Market Scan</p>
+              <p className="text-xl font-black">ACTIVE</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-green-500/10 to-transparent border-green-500/20 shadow-lg">
+          <CardContent className="pt-4 flex items-center gap-4">
+            <div className="p-2 bg-green-500/20 rounded-lg"><Zap className="text-green-500 h-5 w-5" /></div>
+            <div>
+              <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Signal Count</p>
+              <p className="text-xl font-black">{activeSignals.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-orange-500/10 to-transparent border-orange-500/20 shadow-lg">
+          <CardContent className="pt-4 flex items-center gap-4">
+            <div className="p-2 bg-orange-500/20 rounded-lg"><AlertTriangle className="text-orange-500 h-5 w-5" /></div>
+            <div>
+              <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Market Status</p>
+              <p className="text-xl font-black">{isConnected ? 'LIVE' : 'IDLE'}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Active Signals Grid */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold flex items-center gap-2 uppercase tracking-tight">
+            <Sparkles className="h-5 w-5 text-purple-500 fill-purple-500/20" /> Live Detection Feed
+          </h3>
           <div className="flex gap-2">
-            {['all', 'buy', 'sell', 'warning'].map((filter) => (
-              <Button
-                key={filter}
-                variant={filters.includes(filter) ? 'default' : 'outline'}
-                onClick={() => toggleFilter(filter)}
-                className={`capitalize ${
-                  filters.includes(filter)
-                    ? filter === 'buy'
-                      ? 'bg-green-500 hover:bg-green-600'
-                      : filter === 'sell'
-                      ? 'bg-red-500 hover:bg-red-600'
-                      : filter === 'warning'
-                      ? 'bg-orange-500 hover:bg-orange-600'
-                      : 'bg-blue-500 hover:bg-blue-600'
-                    : ''
-                }`}
+            {['low', 'medium', 'high'].map(l => (
+              <Button 
+                key={l} 
+                size="sm" 
+                variant={sensitivity === l ? 'default' : 'outline'}
+                onClick={() => setSensitivity(l)}
+                className="h-7 px-3 text-[10px] uppercase font-black tracking-widest"
               >
-                {filter}
+                {l}
               </Button>
             ))}
           </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">Sensitivity</label>
-            <div className="flex gap-2">
-              {['low', 'medium', 'high'].map((level) => (
-                <Button
-                  key={level}
-                  variant={sensitivity === level ? 'default' : 'outline'}
-                  onClick={() => setSensitivity(level)}
-                  className="capitalize"
-                >
-                  {level}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Performance Metrics */}
-      {performance && (
-        <div className="grid grid-cols-4 gap-4">
-          <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground uppercase">
-                Win Rate
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-green-500">
-                {performance.winRate.toFixed(1)}%
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">↑ +2.3% this week</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground uppercase">
-                Avg Gain
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-blue-500">
-                +{performance.avgGain.toFixed(1)}%
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">per signal</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground uppercase">
-                Total Signals
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-purple-500">
-                {performance.totalSignals.toLocaleString()}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">last 30 days</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-orange-500/10 to-orange-500/5 border-orange-500/20">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground uppercase">
-                Active Now
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-orange-500">
-                {performance.activeNow}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                3 Buy • 2 Sell • 2 Warning
-              </p>
-            </CardContent>
-          </Card>
         </div>
-      )}
 
-      {/* Active Signals */}
-      <div>
-        <h3 className="text-lg font-semibold mb-4">Active Signals</h3>
-        {loading ? (
-          <div className="text-center text-muted-foreground py-8">
-            Loading signals...
-          </div>
-        ) : signals.length === 0 ? (
-          <Card className="bg-card/50 border-border/40">
-            <CardContent className="py-12 text-center text-muted-foreground">
-              No active signals
-            </CardContent>
+        {activeSignals.length === 0 ? (
+          <Card className="bg-card/30 border-dashed border-border/20 py-16 text-center text-muted-foreground italic">
+            Scanning real-time tape for high-confidence patterns...
           </Card>
         ) : (
-          <div className="grid grid-cols-3 gap-4">
-            {signals.map((signal) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activeSignals.map((signal: any) => (
               <Card
                 key={signal.id}
-                className={`bg-card/50 border-l-4 ${
-                  signal.type === 'BUY'
-                    ? 'border-l-green-500'
-                    : signal.type === 'SELL'
-                    ? 'border-l-red-500'
-                    : 'border-l-orange-500'
+                className={`bg-card/50 border-l-4 hover:bg-muted/30 transition-all cursor-default group ${
+                  signal.type === 'BUY' ? 'border-l-green-500' : 
+                  signal.type === 'SELL' ? 'border-l-red-500' : 'border-l-orange-500'
                 }`}
               >
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {getSignalIcon(signal.type)}
-                      <Badge
-                        variant={
-                          signal.type === 'BUY'
-                            ? 'default'
-                            : signal.type === 'SELL'
-                            ? 'destructive'
-                            : 'secondary'
-                        }
-                      >
+                      <Badge variant={signal.type === 'BUY' ? 'default' : signal.type === 'SELL' ? 'destructive' : 'secondary'} className="font-black text-[10px]">
                         {signal.type}
                       </Badge>
                     </div>
-                    <Badge variant="outline">{signal.strength}</Badge>
+                    <Badge variant="outline" className="text-[10px] font-mono opacity-60">{signal.strength}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Entry</p>
-                    <p className="text-xl font-bold font-mono">
-                      ${signal.entry.toFixed(2)}
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
+                  <p className="text-sm font-bold leading-tight group-hover:text-primary transition-colors">{signal.reason}</p>
+                  
+                  <div className="grid grid-cols-2 gap-2 py-3 border-y border-border/5">
                     <div>
-                      <p className="text-xs text-muted-foreground">Target</p>
-                      <p className="text-sm font-bold text-green-500 font-mono">
-                        ${signal.target.toFixed(2)}
-                      </p>
+                      <p className="text-[10px] text-muted-foreground uppercase font-black">Target</p>
+                      <p className="text-sm font-black text-green-500 font-mono">${signal.target.toFixed(1)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Stop Loss</p>
-                      <p className="text-sm font-bold text-red-500 font-mono">
-                        ${signal.stopLoss.toFixed(2)}
-                      </p>
+                      <p className="text-[10px] text-muted-foreground uppercase font-black">Stop</p>
+                      <p className="text-sm font-black text-red-500 font-mono">${signal.stopLoss.toFixed(1)}</p>
                     </div>
                   </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs text-muted-foreground">Confidence</p>
-                      <p className="text-xs font-bold">{signal.confidence}%</p>
-                    </div>
-                    <div className="h-2 bg-border rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-green-500 to-blue-500"
-                        style={{ width: `${signal.confidence}%` }}
-                      />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground font-medium">
+                      {safeFormatDistance(signal.timestamp)}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-1.5 w-12 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${signal.confidence}%` }} />
+                      </div>
+                      <span className="text-[10px] font-black">{signal.confidence}%</span>
                     </div>
                   </div>
-
-                  <p className="text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(signal.timestamp), {
-                      addSuffix: true,
-                    })}
-                  </p>
                 </CardContent>
               </Card>
             ))}
@@ -294,97 +220,16 @@ export function SignalsView({ symbol }: SignalsViewProps) {
         )}
       </div>
 
-      {/* Signal History */}
-      <div>
-        <h3 className="text-lg font-semibold mb-4">Signal History</h3>
-        <Card className="bg-card/50 border-border/40 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border/40 bg-accent/50">
-                  <th className="px-4 py-3 text-left font-semibold">Date/Time</th>
-                  <th className="px-4 py-3 text-left font-semibold">Type</th>
-                  <th className="px-4 py-3 text-left font-semibold">Entry</th>
-                  <th className="px-4 py-3 text-left font-semibold">Exit</th>
-                  <th className="px-4 py-3 text-left font-semibold">Result</th>
-                  <th className="px-4 py-3 text-left font-semibold">P/L</th>
-                  <th className="px-4 py-3 text-left font-semibold">Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((signal) => (
-                  <tr key={signal.id} className="border-b border-border/40 hover:bg-accent/30">
-                    <td className="px-4 py-3 text-muted-foreground">{signal.date}</td>
-                    <td className="px-4 py-3">
-                      <Badge
-                        variant={
-                          signal.type === 'BUY'
-                            ? 'default'
-                            : signal.type === 'SELL'
-                            ? 'destructive'
-                            : 'secondary'
-                        }
-                      >
-                        {signal.type}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 font-mono">
-                      ${signal.entry.toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3 font-mono">
-                      ${signal.exit.toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge
-                        variant={signal.result === 'WIN' ? 'default' : 'destructive'}
-                      >
-                        {signal.result}
-                      </Badge>
-                    </td>
-                    <td
-                      className={`px-4 py-3 font-mono font-semibold ${
-                        signal.profitLoss >= 0
-                          ? 'text-green-500'
-                          : 'text-red-500'
-                      }`}
-                    >
-                      {signal.profitLoss >= 0 ? '+' : ''}
-                      {signal.profitLoss.toFixed(2)}%
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {signal.duration}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Logic Documentation */}
+      <Card className="bg-blue-500/5 border-dashed border-blue-500/20">
+        <CardContent className="p-4 flex items-start gap-3">
+          <Zap className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
+          <div className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="font-black text-foreground uppercase tracking-wider mb-1">Detection Logic Engine Active</p>
+            The engine is performing real-time analysis on the last 20 ticks. It monitors for **Order Flow Absorption** (price stalls), **Aggressive Delta Momentum** (rapid side bias), and **Whale Participation** ({"&gt;"}0.5 BTC). Signals are dynamic and update with every new trade in the buffer.
           </div>
-
-          {/* Pagination */}
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border/40">
-            <p className="text-xs text-muted-foreground">
-              Showing 1-10 of 247 signals
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(Math.max(1, page - 1))}
-                disabled={page === 1}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(page + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        </Card>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

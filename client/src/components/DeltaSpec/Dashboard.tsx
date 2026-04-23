@@ -9,11 +9,11 @@ import { VolumeProfileView } from './Views/VolumeProfileView';
 import { SignalsView } from './Views/SignalsView';
 import { ExportDataView } from './Views/ExportDataView';
 import { LLMGuidanceView } from './Views/LLMGuidanceView';
+import { useMarketData } from '@/hooks/useMarketData';
 
 export function Dashboard() {
-  const [currentSymbol, setCurrentSymbol] = useState('ETHUSDT');
+  const { currentSymbol, setSymbol, isConnected } = useMarketData();
   const [activeTab, setActiveTab] = useState('live-data');
-  const [isConnected, setIsConnected] = useState(true);
 
   const renderView = () => {
     switch (activeTab) {
@@ -41,7 +41,7 @@ export function Dashboard() {
       {/* Header */}
       <Header
         currentSymbol={currentSymbol}
-        onSymbolChange={setCurrentSymbol}
+        onSymbolChange={setSymbol}
         isConnected={isConnected}
       />
 

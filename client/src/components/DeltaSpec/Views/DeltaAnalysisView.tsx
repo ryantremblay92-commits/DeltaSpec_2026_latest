@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMarketData } from '@/hooks/useMarketData';
 import { TrendingUp, TrendingDown } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface DeltaAnalysisViewProps {
   symbol: string;
@@ -13,6 +14,7 @@ export function DeltaAnalysisView({ symbol }: DeltaAnalysisViewProps) {
   const [method, setMethod] = useState('time-based');
   const [sensitivity, setSensitivity] = useState('medium');
   const { cumulativeDelta, trades, isConnected } = useMarketData();
+  const [chartData, setChartData] = useState<{ time: string; delta: number }[]>([]);
 
   // Calculate buy/sell volumes from trades
   const buyVolume = trades
@@ -31,6 +33,26 @@ export function DeltaAnalysisView({ symbol }: DeltaAnalysisViewProps) {
   const cumulativeDeltaValue = cumulativeDelta?.cumulative_delta
     ? parseFloat(cumulativeDelta.cumulative_delta)
     : 0;
+
+  const deltaRef = useRef(0);
+  useEffect(() => {
+    deltaRef.current = cumulativeDeltaValue;
+  }, [cumulativeDeltaValue]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setChartData(prev => {
+        const newData = [...prev, {
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          delta: deltaRef.current
+        }];
+        // Keep last 60 points
+        if (newData.length > 60) return newData.slice(newData.length - 60);
+        return newData;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -88,6 +110,47 @@ export function DeltaAnalysisView({ symbol }: DeltaAnalysisViewProps) {
                 <SelectItem value="high">High</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Chart Section */}
+      <Card className="bg-card/50 border-border/40">
+        <CardHeader>
+          <CardTitle>Cumulative Delta Flow</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px] w-full">
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="colorDelta" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={chartData[chartData.length - 1].delta >= 0 ? '#3b82f6' : '#ef4444'} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={chartData[chartData.length - 1].delta >= 0 ? '#3b82f6' : '#ef4444'} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                  <XAxis dataKey="time" stroke="#666" tick={{ fill: '#888', fontSize: 12 }} />
+                  <YAxis stroke="#666" tick={{ fill: '#888', fontSize: 12 }} domain={['auto', 'auto']} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                    itemStyle={{ color: '#fff' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="delta"
+                    stroke={chartData[chartData.length - 1].delta >= 0 ? '#3b82f6' : '#ef4444'}
+                    fillOpacity={1}
+                    fill="url(#colorDelta)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Collecting delta data...
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

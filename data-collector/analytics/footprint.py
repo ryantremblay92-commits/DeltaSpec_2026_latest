@@ -11,6 +11,17 @@ def save_aggregated_footprint(trades, ts):
     conn = sqlite3.connect(db_file_path)
     cursor = conn.cursor()
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS footprint_data (
+            ts TEXT,
+            price_level REAL,
+            bid_volume REAL,
+            ask_volume REAL,
+            delta REAL,
+            imbalance REAL,
+            PRIMARY KEY (ts, price_level)
+        )
+    """)
     # Save each footprint level
     for trade in trades:
         cursor.execute("""
@@ -40,6 +51,13 @@ def save_footprint_snapshot(fp, imb, ts):
     conn = sqlite3.connect(db_file_path)
     cursor = conn.cursor()
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS footprint_snapshots (
+            timestamp TEXT PRIMARY KEY,
+            footprint_data TEXT,
+            imbalance_data TEXT
+        )
+    """)
     # Save raw footprint snapshot (could be JSON or structured data)
     cursor.execute("""
         INSERT OR REPLACE INTO footprint_snapshots

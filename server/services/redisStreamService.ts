@@ -27,10 +27,9 @@ export class RedisStreamService {
 
     constructor(io: SocketIOServer) {
         this.io = io;
-        // Initialize last IDs to '$' (only new messages) or '0' (all messages)
-        // Using '$' to start listening from now
+        // Initialize last IDs to '0' to pick up existing data in streams on startup
         STREAMS.forEach((stream) => {
-            this.lastIds[stream] = '$';
+            this.lastIds[stream] = '0';
         });
     }
 
@@ -45,13 +44,12 @@ export class RedisStreamService {
         while (this.isRunning) {
             try {
                 // Construct XREAD arguments
-                // STREAMS key1 key2 ... id1 id2 ...
                 const args: any[] = ['BLOCK', 1000, 'STREAMS', ...STREAMS];
                 STREAMS.forEach((stream) => {
                     args.push(this.lastIds[stream]);
                 });
 
-                // @ts-ignore - ioredis types might be slightly off for xread with array spread
+                // @ts-ignore
                 const results = await redis.xread(...args);
 
                 if (results) {
@@ -59,15 +57,11 @@ export class RedisStreamService {
                         for (const [id, fields] of messages) {
                             this.lastIds[stream] = id;
 
-                            // Parse fields (array of strings) into object
-                            // fields: ['key1', 'val1', 'key2', 'val2', ...]
                             const data: Record<string, any> = {};
                             for (let i = 0; i < fields.length; i += 2) {
                                 data[fields[i]] = fields[i + 1];
                             }
 
-                            // Broadcast to WebSocket
-                            // Map stream name to event name
                             const eventName = this.getEventName(stream);
                             this.io.emit(eventName, data);
                         }
@@ -75,14 +69,12 @@ export class RedisStreamService {
                 }
             } catch (error) {
                 console.error('Error reading Redis streams:', error);
-                // Wait a bit before retrying to avoid tight loop on error
                 await new Promise((resolve) => setTimeout(resolve, 5000));
             }
         }
     }
 
     private getEventName(stream: string): string {
-        // Remove 'delta_' prefix
         return stream.replace('delta_', '');
     }
 
