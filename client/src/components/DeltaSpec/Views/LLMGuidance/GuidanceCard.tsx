@@ -52,7 +52,7 @@ export const GuidanceCard: React.FC<GuidanceCardProps> = ({ guidance, isLoading,
 
   // Get sentiment icon and color
   const getSentimentDisplay = () => {
-    switch (guidance.analysis.sentiment) {
+    switch (guidance.analysis?.sentiment) {
       case 'bullish':
         return {
           icon: <TrendingUp className="w-5 h-5" />,
@@ -76,7 +76,7 @@ export const GuidanceCard: React.FC<GuidanceCardProps> = ({ guidance, isLoading,
 
   // Get action color
   const getActionColor = () => {
-    switch (guidance.recommendations.action) {
+    switch (guidance.recommendations?.action) {
       case 'buy':
         return 'text-green-400 bg-green-500/10 border-green-500/30';
       case 'sell':
@@ -88,7 +88,7 @@ export const GuidanceCard: React.FC<GuidanceCardProps> = ({ guidance, isLoading,
 
   // Get risk color
   const getRiskColor = () => {
-    switch (guidance.risks.level) {
+    switch (guidance.risks?.level) {
       case 'low':
         return 'text-green-400 bg-green-500/10 border-green-500/30';
       case 'medium':
@@ -129,14 +129,14 @@ export const GuidanceCard: React.FC<GuidanceCardProps> = ({ guidance, isLoading,
               <span className="ml-2">{sentiment.text}</span>
             </Badge>
             <Badge variant="outline" className="border-purple-500/30 text-purple-400 bg-purple-500/10">
-              {guidance.analysis.confidence}% Confident
+              {guidance.analysis?.confidence || 70}% Confident
             </Badge>
           </div>
         </div>
 
         {/* Summary */}
         <div className="bg-gray-800/40 backdrop-blur-sm rounded-lg p-3 border border-gray-700/30">
-          <p className="text-sm text-gray-300 leading-relaxed">{guidance.analysis.summary}</p>
+          <p className="text-sm text-gray-300 leading-relaxed">{guidance.analysis?.summary || 'Analyzing market data...'}</p>
         </div>
 
         <Separator className="bg-gray-700/30" />
@@ -148,7 +148,7 @@ export const GuidanceCard: React.FC<GuidanceCardProps> = ({ guidance, isLoading,
             Key Points
           </h4>
           <div className="space-y-1.5">
-            {guidance.analysis.keyPoints.slice(0, 3).map((point, index) => (
+            {(guidance.analysis?.keyPoints || []).slice(0, 3).map((point, index) => (
               <div key={index} className="flex items-start gap-2 text-xs text-gray-400">
                 <div className="w-1 h-1 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
                 <span>{point}</span>
@@ -169,11 +169,11 @@ export const GuidanceCard: React.FC<GuidanceCardProps> = ({ guidance, isLoading,
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-400">Action:</span>
             <Badge variant="outline" className={`${getActionColor()} font-medium uppercase`}>
-              {guidance.recommendations.action}
+              {guidance.recommendations?.action || 'hold'}
             </Badge>
           </div>
 
-          {guidance.recommendations.entryPrice && (
+          {guidance.recommendations?.entryPrice && (
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-400">Entry:</span>
               <span className="text-sm font-medium text-white">
@@ -182,7 +182,7 @@ export const GuidanceCard: React.FC<GuidanceCardProps> = ({ guidance, isLoading,
             </div>
           )}
 
-          {guidance.recommendations.stopLoss && (
+          {guidance.recommendations?.stopLoss && (
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-400">Stop Loss:</span>
               <span className="text-sm font-medium text-red-400">
@@ -191,7 +191,7 @@ export const GuidanceCard: React.FC<GuidanceCardProps> = ({ guidance, isLoading,
             </div>
           )}
 
-          {guidance.recommendations.takeProfit && (
+          {guidance.recommendations?.takeProfit && (
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-400">Take Profit:</span>
               <span className="text-sm font-medium text-green-400">
@@ -200,7 +200,7 @@ export const GuidanceCard: React.FC<GuidanceCardProps> = ({ guidance, isLoading,
             </div>
           )}
 
-          {guidance.recommendations.positionSize && (
+          {guidance.recommendations?.positionSize && (
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-400">Position Size:</span>
               <span className="text-sm font-medium text-purple-400">
@@ -211,7 +211,7 @@ export const GuidanceCard: React.FC<GuidanceCardProps> = ({ guidance, isLoading,
 
           <div className="bg-gray-800/40 backdrop-blur-sm rounded-lg p-2.5 border border-gray-700/30 mt-2">
             <p className="text-xs text-gray-400 leading-relaxed">
-              {guidance.recommendations.reasoning}
+              {guidance.recommendations?.reasoning || 'No reasoning provided'}
             </p>
           </div>
         </div>
@@ -226,12 +226,12 @@ export const GuidanceCard: React.FC<GuidanceCardProps> = ({ guidance, isLoading,
               Risk Assessment
             </h4>
             <Badge variant="outline" className={`${getRiskColor()} font-medium uppercase text-xs`}>
-              {guidance.risks.level} Risk
+              {guidance.risks?.level || 'medium'} Risk
             </Badge>
           </div>
 
           <div className="space-y-1.5">
-            {guidance.risks.factors.slice(0, 3).map((factor, index) => (
+            {(guidance.risks?.factors || []).slice(0, 3).map((factor, index) => (
               <div key={index} className="flex items-start gap-2 text-xs text-gray-400">
                 <AlertTriangle className="w-3 h-3 text-amber-400 mt-0.5 flex-shrink-0" />
                 <span>{factor}</span>

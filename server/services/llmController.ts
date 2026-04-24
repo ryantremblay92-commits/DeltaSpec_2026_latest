@@ -83,44 +83,54 @@ Respond in a structured JSON format:
   return basePrompt;
 }
 
+import { getTableSchema, executeAiQuery } from './dbService';
+
 /**
  * Generate a conversational response prompt for the LLM
  */
 async function generateChatPrompt(symbol: string, conversationHistory: ILLMMessage[]): Promise<ChatMessage[]> {
   const marketData = await getLatestMarketData(symbol);
+  const dbSchema = await getTableSchema();
   
   const systemMessage: ChatMessage = {
     role: 'system',
     content: `You are the DeltaTradeHub AI Intelligence Engine. 
-    You have a DIRECT LIVE TELEMETRY FEED from the Delta Exchange. 
-    
-    IMPORTANT: You must NEVER say you do not have real-time data. You HAVE it right here:
-    
+    [LIVE TELEMETRY SNAPSHOT]
     ${marketData}
     
-    [DATA GLOSSARY - IMPORTANT]
-    - Price: Current market price in USD.
-    - Cum. Delta: Net difference between market buy and market sell volume. A positive number means more aggressive buyers. It is NOT a price percentage.
-    - Interval Delta: Delta over the last 1-minute period. 
-    - OI (Open Interest): The total number of outstanding derivative contracts. 0.0 means data is still loading.
-    - Liq Price: The nearest price where a large liquidation may occur. $0.0 means no liquidation risk detected yet.
+    [DATABASE ACCESS]
+    ${dbSchema}
     
-    If any value is 'N/A' or '0.0', state that the data stream is initializing. 
-    DO NOT hallucinate price percentages from Delta values. 
-    Be clinical, data-driven, and prioritize professional trading logic.`
+    [TASK]
+    You are the DeltaTradeHub Autonomous Analyst. You MUST respond in valid JSON.
+    
+    [JSON SCHEMA]
+    {
+      "query": "SQL string if history is needed, else null",
+      "analysis": "Your natural language analysis",
+      "sentiment": "Bullish | Bearish | Neutral",
+      "confidence": number (0-100)
+    }
+    
+    [RULES]
+    1. If 'query' is present, 'analysis' MUST be null (Synthesis happens in turn 2).
+    2. Synthesis turn: 'query' is null, 'analysis' contains the final report.
+    3. Use SQLite syntax ONLY (e.g., date('now') or datetime('now'), NOT NOW()).
+    
+    Be clinical and strictly follow the JSON structure.`
   };
 
   const history = conversationHistory
     .slice(-10) // Remember last 10 messages
     .filter(msg => {
-      // Filter out past refusals to prevent the AI from getting stuck in a 'I don't have data' loop
-      const refusalPatterns = [
+      // Filter out past refusals and "passive" code-sharing to prevent the AI from repeating mistakes
+      const badPatterns = [
         "don't have real-time data",
-        "don't have access to real-time",
-        "apologize for any confusion",
-        "cannot provide the current price"
+        "```sql",
+        "SELECT * FROM",
+        "DATEADD("
       ];
-      return !refusalPatterns.some(p => msg.content.toLowerCase().includes(p));
+      return !badPatterns.some(p => msg.content.includes(p));
     })
     .map(msg => ({
       role: msg.role as 'user' | 'assistant',
@@ -183,33 +193,95 @@ export async function sendChatMessage(userId: string, message: string, symbol?: 
   const userObjectId = new mongoose.Types.ObjectId(userId);
   const targetSymbol = symbol || 'BTCUSDT';
   let conversation = await LLMConversation.findOne({ userId: userObjectId, symbol: targetSymbol });
-  if (!conversation) conversation = new LLMConversation({ userId: userObjectId, symbol: targetSymbol, messages: [] });
-  const userMessage: ILLMMessage = { id: `msg_${Date.now()}_user`, role: 'user', content: message, timestamp: new Date() };
+  
+  if (!conversation) {
+    conversation = new LLMConversation({ userId: userObjectId, symbol: targetSymbol, messages: [] });
+  }
+
+  const userMessage: ILLMMessage = { 
+    id: `msg_${Date.now()}_user`, 
+    role: 'user', 
+    content: message, 
+    timestamp: new Date() 
+  };
   conversation.messages.push(userMessage);
   await conversation.save();
+
   try {
     const provider = process.env.LLM_PROVIDER || 'openai';
     const model = process.env.LLM_MODEL || 'gpt-3.5-turbo';
     const marketData = await getLatestMarketData(targetSymbol);
-    const contextEnhancedMessage = `${marketData}\n\nUser Question: ${message}`;
     
-    console.log(`[LLM Controller] Requesting AI response from ${provider} (${model}) with Live Context`);
+    // Initial prompt preparation
     const historyForPrompt = conversation.messages.slice(0, -1);
     const promptMessages = await generateChatPrompt(targetSymbol, historyForPrompt);
     
-    // Use the enhanced message for the final prompt
-    promptMessages.push({ role: 'user', content: contextEnhancedMessage });
+    // IMPORTANT: Only send the user question here. Market data is already in the SYSTEM prompt.
+    // Adding it here again causes the AI to hallucinate based on the snapshot.
+    promptMessages.push({ role: 'user', content: `User Question: ${message}` });
     
-    const aiResponse = await sendLLMRequest(provider, model, promptMessages);
+    console.log(`[LLM DEBUG] Sending Prompt with ${promptMessages.length} messages...`);
+    let aiResponse = await sendLLMRequest(provider, model, promptMessages);
+    
+    console.log(`[LLM DEBUG] Raw AI Response:\n${aiResponse}`);
+
+    // RECURSIVE SQL LOOP
+    const sqlRequestTag = aiResponse.includes('[SQL_REQUEST]');
+    const markdownSqlBlock = aiResponse.match(/```sql\n(SELECT.*?)\n```/si);
+    
+    if (sqlRequestTag || markdownSqlBlock) {
+      console.log(`[DB AGENT] SQL detected! Tag: ${sqlRequestTag}, Markdown: ${!!markdownSqlBlock}`);
+      // Flexible regex that catches [SQL_REQUEST] or falls back to markdown block
+      let sql = '';
+      if (sqlRequestTag) {
+        const match = aiResponse.match(/\[SQL_REQUEST\](.*?)(?:\[\/SQL_REQUEST\]|$)/s);
+        if (match) sql = match[1].trim();
+      } else if (markdownSqlBlock) {
+        sql = markdownSqlBlock[1].trim();
+      }
+
+      if (sql) {
+        sql = sql.replace(/;$/, ''); // Clean up trailing semicolon
+        try {
+          console.log(`[DB AGENT] AI REQUESTED SQL: ${sql}`);
+          const queryResults = await executeAiQuery(sql);
+          
+          // Re-prompt the AI with the data
+          const retryMessages = [...promptMessages];
+          retryMessages.push({ role: 'assistant', content: aiResponse });
+          retryMessages.push({ 
+            role: 'system', 
+            content: `QUERY RESULTS:\n${JSON.stringify(queryResults, null, 2)}\n\nPlease provide a final, human-readable answer based on these results.` 
+          });
+          
+          console.log(`[DB AGENT] Re-prompting AI with query results...`);
+          aiResponse = await sendLLMRequest(provider, model, retryMessages);
+        } catch (dbError: any) {
+          console.error(`[DB AGENT] Query Error:`, dbError.message);
+          aiResponse = `I tried to query the database, but encountered an error: ${dbError.message}`;
+        }
+      }
+    }
+
     const assistantMessage: ILLMMessage = {
-      id: `msg_${Date.now()}_assistant`, role: 'assistant', content: aiResponse, timestamp: new Date(),
-      metadata: { symbol: targetSymbol, confidence: 85, sentiment: analyzeSentiment(aiResponse), tags: ['analysis'] }
+      id: `msg_${Date.now()}_assistant`,
+      role: 'assistant',
+      content: aiResponse,
+      timestamp: new Date(),
+      metadata: { 
+        symbol: targetSymbol, 
+        confidence: 90, 
+        sentiment: analyzeSentiment(aiResponse), 
+        tags: ['analysis', 'database-query'] 
+      }
     };
+    
     conversation.messages.push(assistantMessage);
     await conversation.save();
     return assistantMessage;
   } catch (error) {
-    return userMessage; // Fallback
+    console.error('[LLM Controller] Chat Error:', error);
+    return userMessage;
   }
 }
 
@@ -217,33 +289,133 @@ export async function* streamChatMessage(userId: string, message: string, symbol
   const userObjectId = new mongoose.Types.ObjectId(userId);
   const targetSymbol = symbol || 'BTCUSDT';
   let conversation = await LLMConversation.findOne({ userId: userObjectId, symbol: targetSymbol });
-  if (!conversation) conversation = new LLMConversation({ userId: userObjectId, symbol: targetSymbol, messages: [] });
+  if (!conversation) {
+    conversation = new LLMConversation({ userId: userObjectId, symbol: targetSymbol, messages: [] });
+  }
+
   const userMessage: ILLMMessage = { id: `msg_${Date.now()}_user`, role: 'user', content: message, timestamp: new Date() };
   conversation.messages.push(userMessage);
   await conversation.save();
+
   let fullResponse = '';
   const assistantMessageId = `msg_${Date.now()}_assistant`;
+
   try {
     const provider = process.env.LLM_PROVIDER || 'openai';
     const model = process.env.LLM_MODEL || 'gpt-3.5-turbo';
-    
     const marketData = await getLatestMarketData(targetSymbol);
-    const contextEnhancedMessage = `${marketData}\n\nUser Question: ${message}`;
     
     const historyForPrompt = conversation.messages.slice(0, -1);
     const promptMessages = await generateChatPrompt(targetSymbol, historyForPrompt);
-    
-    // Append the enhanced user message
-    promptMessages.push({ role: 'user', content: contextEnhancedMessage });
-    
-    const stream = streamLLMRequest(provider, model, promptMessages);
-    for await (const chunk of stream) {
-      fullResponse += chunk;
-      yield { chunk, messageId: assistantMessageId };
+    promptMessages.push({ role: 'user', content: `User Question: ${message}` });
+
+    let currentMessages = [...promptMessages];
+    let capturedResponse = '';
+    let parsedResponse: any = null;
+    let isSynthesisComplete = false;
+    let loops = 0;
+    const MAX_LOOPS = 3;
+
+    while (!isSynthesisComplete && loops < MAX_LOOPS) {
+      loops++;
+      capturedResponse = '';
+      let isBufferingTag = false;
+      
+      const stream = streamLLMRequest(provider, model, currentMessages);
+      for await (const chunk of stream) {
+        capturedResponse += chunk;
+        
+        if (capturedResponse.includes('[TASK]') || capturedResponse.includes('[DATABASE ACCESS]')) {
+          console.warn("[DB AGENT] ECHO DETECTED - Truncating and re-prompting.");
+          capturedResponse = "Investigating live market data and historical database...";
+          break;
+        }
+        
+        if (chunk.includes('[') || isBufferingTag) {
+          isBufferingTag = true;
+          if (capturedResponse.includes('[SQL_REQUEST]') || capturedResponse.length > 500) {
+            continue; 
+          } else if (!capturedResponse.includes('[') && isBufferingTag) {
+            isBufferingTag = false;
+            yield { chunk: capturedResponse, messageId: assistantMessageId };
+          }
+        } else {
+          yield { chunk, messageId: assistantMessageId };
+        }
+      }
+
+      parsedResponse = null;
+      try {
+        const jsonStart = capturedResponse.indexOf('{');
+        const jsonEnd = capturedResponse.lastIndexOf('}');
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+          parsedResponse = JSON.parse(capturedResponse.substring(jsonStart, jsonEnd + 1));
+        }
+      } catch (e) {
+        console.warn("[DB AGENT] JSON Parse Error");
+      }
+
+      if (parsedResponse && parsedResponse.query) {
+        let sql = parsedResponse.query.trim().replace(/;$/, '').trim();
+        if (sql) {
+          try {
+            console.log(`[DB AGENT] EXECUTING STRUCTURED SQL: "${sql}"`);
+            const queryResults = await executeAiQuery(sql);
+            
+            currentMessages.push({ role: 'assistant', content: JSON.stringify(parsedResponse) });
+            currentMessages.push({ 
+              role: 'user', 
+              content: `QUERY RESULTS:\n${JSON.stringify(queryResults, null, 2)}\n\nIMPORTANT: Provide the final answer in the JSON schema. Set 'query' to null.` 
+            });
+            yield { chunk: "\n\n[Analyzing Database Results...]\n", messageId: assistantMessageId };
+          } catch (dbError: any) {
+            console.error(`[DB AGENT] Query Error: ${dbError.message}`);
+            currentMessages.push({ role: 'assistant', content: JSON.stringify(parsedResponse) });
+            currentMessages.push({ 
+              role: 'user', 
+              content: `SQL ERROR: ${dbError.message}\n\nPlease fix the query using SQLite syntax and provide the JSON again.` 
+            });
+            yield { chunk: `\n\n[Fixing SQL Error: ${dbError.message}]\n`, messageId: assistantMessageId };
+          }
+        } else {
+          isSynthesisComplete = true;
+        }
+      } else {
+        isSynthesisComplete = true;
+      }
     }
+
+
+    // FINAL CLEANSE: Extract just the 'analysis' text for the user UI
+    let finalContent = capturedResponse;
+    try {
+      const jsonStart = capturedResponse.indexOf('{');
+      const jsonEnd = capturedResponse.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        const jsonStr = capturedResponse.substring(jsonStart, jsonEnd + 1);
+        const finalObj = JSON.parse(jsonStr);
+        finalContent = finalObj.analysis || capturedResponse;
+      }
+    } catch (e) {}
+
+    // Ensure we don't leak technical tags even in fallback
+    const cleansedResponse = finalContent
+      .replace(/\[AGENT_QUERY_START\].*?\[AGENT_QUERY_END\]/gs, '')
+      .replace(/\[AGENT_QUERY_START\].*$/gs, '')
+      .replace(/\[Analyzing Database Results...\]/g, '')
+      .trim();
+
     const assistantMessage: ILLMMessage = {
-      id: assistantMessageId, role: 'assistant', content: fullResponse, timestamp: new Date(),
-      metadata: { symbol: targetSymbol, confidence: 85, sentiment: analyzeSentiment(fullResponse), tags: ['analysis'] }
+      id: assistantMessageId,
+      role: 'assistant',
+      content: cleansedResponse,
+      timestamp: new Date(),
+      metadata: { 
+        symbol: targetSymbol, 
+        confidence: parsedResponse?.confidence || 95, 
+        sentiment: (parsedResponse?.sentiment || 'neutral').toLowerCase() as any, 
+        tags: ['analysis', 'structured-json'] 
+      }
     };
     conversation.messages.push(assistantMessage);
     await conversation.save();
