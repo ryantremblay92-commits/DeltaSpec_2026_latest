@@ -7,6 +7,7 @@ import basicRoutes from './routes/index';
 import authRoutes from './routes/authRoutes';
 import llmRoutes from './routes/llmRoutes';
 import dataRoutes from './routes/dataRoutes';
+import backtestRoutes from './routes/backtestRoutes';
 import { connectDB } from './config/database';
 import cors from 'cors';
 import { RedisStreamService } from './services/redisStreamService';
@@ -67,6 +68,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/llm', llmRoutes);
 // Data Routes
 app.use('/api/data', dataRoutes);
+// Backtest Routes
+app.use('/api/backtest', backtestRoutes);
 
 // If no routes handled the request, it's a 404
 app.use((req: Request, res: Response) => {
